@@ -128,6 +128,14 @@ function cleanInline(text) {
     .replace(/_([^_\n]+)_/g, "$1"); // italic
 }
 
+// A section whose only content is an italic placeholder (e.g. "_no personal
+// meetings_", "_no events_") carries nothing — drop it rather than print a
+// "Header / no X" line.
+function isPlaceholderOnly(body) {
+  const nonBlank = body.map((l) => l.trim()).filter(Boolean);
+  return nonBlank.length > 0 && nonBlank.every((l) => /^_.+_$/.test(l));
+}
+
 // Clean a section body into compact plain-text lines. Empty -> [].
 function cleanSection(body) {
   const out = [];
@@ -158,6 +166,10 @@ function buildMessage({ lines, sectionNames, relNoExt }) {
     const body = extractSection(lines, name);
     if (body === null) {
       skipped.push(`${name} (heading absent)`);
+      continue;
+    }
+    if (isPlaceholderOnly(body)) {
+      skipped.push(`${name} (empty)`);
       continue;
     }
     const cleaned = cleanSection(body);
