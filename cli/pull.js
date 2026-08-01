@@ -269,6 +269,22 @@ async function pullLifeData(spinner) {
   const now = new Date().toISOString();
   const life = { _meta: { pulledAt: now } };
 
+  // Load existing life.json up front so a failed sub-query can preserve prior
+  // data rather than wiping it — mirrors pullCollectedData / pullCalendar. This
+  // matters most for tasks: an empty tasks array poisons the task-content delta
+  // cache below, forcing a full body re-fetch of every task on the next run,
+  // which blows the pull step's wall-clock timeout. A transient Notion query
+  // failure must not clobber good data. Also reused as the delta baseline.
+  const existingLifePath = path.join(DATA_DIR, "life.json");
+  let existingLife = null;
+  try {
+    if (fs.existsSync(existingLifePath)) {
+      existingLife = JSON.parse(readFileSyncRetry(existingLifePath, "utf-8"));
+    }
+  } catch {
+    existingLife = null;
+  }
+
   for (const [key, dbConfig] of Object.entries(LIFE_DATABASES)) {
     const dbId = process.env[dbConfig.envVar];
     if (!dbId) continue;
@@ -280,27 +296,23 @@ async function pullLifeData(spinner) {
       spinner.stop(`  ✓ ${life[key].length} ${dbConfig.label}`);
       await delay(config.sources.rateLimits.notion.backoffMs);
     } catch (error) {
-      spinner.stop(`  ✗ ${dbConfig.label}: ${error.message}`);
-      life[key] = [];
+      // On error preserve the existing bucket rather than wiping it — a
+      // transient API failure shouldn't drop historical data (and must not
+      // reset the task-content cache to empty).
+      const preserved = Array.isArray(existingLife?.[key]) ? existingLife[key] : [];
+      life[key] = preserved;
+      spinner.stop(`  ✗ ${dbConfig.label}: ${error.message} (kept ${preserved.length} existing)`);
     }
   }
 
   // Fetch page content for tasks (delta: only re-fetch changed tasks)
   if (life.tasks && life.tasks.length > 0) {
-    // Build lookup from existing life.json for delta detection
-    const existingLifePath = path.join(DATA_DIR, "life.json");
+    // Build lookup from the existing life.json snapshot for delta detection
     const previousTasks = {};
-    try {
-      if (fs.existsSync(existingLifePath)) {
-        const existing = JSON.parse(readFileSyncRetry(existingLifePath, "utf-8"));
-        if (existing.tasks) {
-          for (const t of existing.tasks) {
-            if (t._notionId) previousTasks[t._notionId] = t;
-          }
-        }
+    if (Array.isArray(existingLife?.tasks)) {
+      for (const t of existingLife.tasks) {
+        if (t._notionId) previousTasks[t._notionId] = t;
       }
-    } catch {
-      // If we can't read existing data, fetch everything
     }
 
     spinner.start();
