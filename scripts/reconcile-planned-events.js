@@ -9,17 +9,21 @@
  * `/retro-week` walks plan-vs-actual and this script does the calendar cleanup
  * so Jon never deletes placeholders by hand.
  *
- * TWO MODES — pull local, manipulate, apply:
+ * TWO STEPS — audit, then delete:
  *
- *   1. PULL — dump the week's `Planned:` events (with real event IDs) to a
- *      local JSON so `/retro-week` can reason over them. Read-only.
+ *   1. AUDIT (--pull) — dump the week's `Planned:` events (with real event IDs)
+ *      to local JSON, print a per-event verdict, AND write a ready-to-apply
+ *      manifest. Read-only against the calendar. Auto habits resolve to delete;
+ *      manual habits (cooking, reading, …) come back "review" for `/retro-week`
+ *      to resolve from the habits walk.
  *
  *        node scripts/reconcile-planned-events.js --pull <week> [--out <path>]
  *
- *      Default out: local/calendar/planned-<week>.json
+ *      Writes: local/calendar/planned-<week>.json          (audit dump)
+ *              local/calendar/planned-actions-<week>.json  (manifest)
  *
- *   2. APPLY — execute a manifest of per-event actions (delete / move / relabel)
- *      that `/retro-week` produced from the habits-walk verdicts.
+ *   2. DELETE (--apply) — execute the manifest. Any item still marked "review"
+ *      is skipped, so an unresolved verdict never gets deleted.
  *
  *        node scripts/reconcile-planned-events.js --apply <manifest> [--dry-run]
  *
@@ -35,8 +39,10 @@
  *   - Before every mutate it re-fetches the event and refuses to act unless the
  *     live summary still starts with "Planned:" — a wrong/stale id can't nuke a
  *     real event.
- *   - --dry-run prints every action and writes nothing.
+ *   - Any manifest item still marked "review" is skipped, never deleted.
  *   - Google Calendar deletes go to its trash (recoverable ~30 days).
+ *   - --dry-run remains an optional preview (writes nothing); the --pull audit
+ *     is the default preview.
  *
  * Run on the mini (PERSONAL_GOOGLE_REFRESH_TOKEN must be set).
  */
@@ -66,6 +72,21 @@ const DRY_RUN = args.includes("--dry-run");
 function argValue(flag) {
   const i = args.indexOf(flag);
   return i >= 0 ? args[i + 1] : undefined;
+}
+
+/** What this tool is doing — printed on every run so the output is self-explanatory. */
+function printDisclaimer() {
+  console.log(
+    "\nℹ️  Planned-event cleanup — clearing /plan-week's \"Planned:\" placeholders.\n" +
+    "   The main personal calendar holds the week's plan as \"Planned:\" events; the\n" +
+    "   actuals live on the dedicated habit calendars. At retro these placeholders go:\n" +
+    "     • workouts, wake-ups, games, coding         → DELETE (auto-captured elsewhere)\n" +
+    "     • cooking, reading, music, art, meditation  → MOVE to its habit calendar if it\n" +
+    "                                                    happened, else DELETE\n" +
+    "     • a meal at a place                         → RELABEL in place (drop \"Planned:\")\n" +
+    "   Deletes land in Google Calendar trash (recoverable ~30 days). Only events whose\n" +
+    "   title still starts with \"Planned:\" are ever touched."
+  );
 }
 
 function isPlanned(summary) {
@@ -116,6 +137,7 @@ function eventStart(ev) {
 }
 
 async function doPull(svc, week) {
+  printDisclaimer();
   const { title, start, end } = loadWeekRange(week);
   const timeMin = new Date(`${start}T00:00:00`);
   const timeMax = new Date(`${end}T23:59:59`);
@@ -144,11 +166,34 @@ async function doPull(svc, week) {
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, JSON.stringify({ week: title, range: { start, end }, events: planned }, null, 2) + "\n");
 
-  console.log(`\n📥 Pulled ${planned.length} Planned event(s) for ${title} (${start} → ${end})\n`);
+  // Ready-to-apply manifest. Auto habits resolve to "delete"; manual habits stay
+  // "review" (carrying targetKey + a suggested newSummary) so /retro-week only
+  // flips them to move/delete from the habits walk. --apply skips any "review".
+  const manifest = planned.map((p) => {
+    const item = { id: p.id, summary: p.summary, action: p.suggestedAction };
+    if (p.suggestedAction === "review") {
+      if (p.targetKey) item.targetKey = p.targetKey;
+      item.newSummary = p.strippedTitle;
+    }
+    return item;
+  });
+  const manifestPath = path.resolve(`local/calendar/planned-actions-${week}.json`);
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+
+  const reviews = manifest.filter((m) => m.action === "review").length;
+  console.log(`\n📋 Audit — ${planned.length} Planned event(s) for ${title} (${start} → ${end}):\n`);
   for (const p of planned) {
-    console.log(`  ${String(p.start).slice(0, 16)}  ${p.summary}  →  [${p.habitType}${p.auto ? ", auto" : ""}]`);
+    const verdict = p.suggestedAction === "delete"
+      ? "DELETE"
+      : `REVIEW  (→ move to ${p.targetKey || "?"} cal if it happened, else delete)`;
+    console.log(`  ${String(p.start).slice(0, 16)}  ${p.summary}  →  ${verdict}`);
   }
-  console.log(`\n📝 Wrote ${outPath}\n`);
+  console.log(`\n📝 Audit     ${outPath}`);
+  console.log(`📝 Manifest  ${manifestPath}`);
+  if (reviews > 0) {
+    console.log(`\n⚠️  ${reviews} event(s) need a REVIEW verdict — /retro-week resolves these from the habits walk before --apply.`);
+  }
+  console.log("");
 }
 
 /** Re-fetch and confirm the event is still a Planned placeholder before mutating. */
@@ -160,6 +205,7 @@ async function guard(svc, id) {
 }
 
 async function doApply(svc, manifestPath) {
+  printDisclaimer();
   const raw = fs.readFileSync(path.resolve(manifestPath), "utf-8");
   const manifest = JSON.parse(raw);
   if (!Array.isArray(manifest)) throw new Error("manifest must be a JSON array");
@@ -222,6 +268,9 @@ async function doApply(svc, manifestPath) {
         console.log(`  ✅ MOVED  ${ev.summary}  →  ${item.targetKey} cal as "${newSummary}"`);
       }
       moved++;
+    } else if (action === "review") {
+      console.log(`  ⏭️  SKIP ${label} — still "review"; resolve it (move or delete) before applying`);
+      skipped++;
     } else {
       console.log(`  ⏭️  SKIP ${label} — unknown action "${action}"`);
       skipped++;
