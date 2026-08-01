@@ -41,6 +41,8 @@ install_one "com.brickbot.pull-linear" # caches Linear projects + assigned issue
 install_one "com.brickbot.app-launcher"
 install_one "com.brickbot.watchdog"   # push-based heartbeat; reads ping files
 install_one "com.brickbot.caffeinate" # holds idle sleep off 06:00–23:30 daily
+install_one "com.brickbot.daily-text-morning" # texts today's note digest at 07:20
+install_one "com.brickbot.daily-text-evening"  # texts the day's recaps at 21:20
 
 echo ""
 echo "Done."

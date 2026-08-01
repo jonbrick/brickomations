@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.brickbot.daily-text-evening</string>
+
+    <!-- Texts a plain-text digest of today's daily note (evening sections: the    -->
+    <!-- day's meeting recaps) with a tappable obsidian:// link. Fires 20 min       -->
+    <!-- after the 9 PM Cowork evening-processor, so the recaps are written.        -->
+    <!-- No wakelock wrapper: 21:20 sits inside the daily caffeinate window         -->
+    <!-- (06:00-23:30) and the script exits in seconds (osascript is timeout-       -->
+    <!-- bounded in the script). No heartbeat/watchdog: the delivered text is its   -->
+    <!-- own success signal — a missing text is self-evident.                       -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/node</string>
+        <string>__HOME__/projects/brickbot/scripts/send-daily-text.js</string>
+        <string>--slot</string>
+        <string>evening</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>21</integer>
+        <key>Minute</key><integer>20</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/projects/brickbot/local/logs/launchd-stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/projects/brickbot/local/logs/launchd-stderr.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>__HOME__/projects/brickbot</string>
+</dict>
+</plist>
