@@ -51,6 +51,17 @@ function slugify(title) {
     .replace(/-+/g, "-");
 }
 
+/**
+ * Read a record's title value via the collector-supplied `_titleKey`, so the
+ * sync follows Notion's title column no matter what it's renamed to
+ * (e.g. Goals "Goal" → "Name", Themes "Epic" → "Name"). pull.js tags
+ * `_titleKey` with whichever property has type "title". Returns "" if absent.
+ */
+function titleOf(record) {
+  const key = record && record._titleKey;
+  return (key && record[key]) || "";
+}
+
 /** Escape double quotes for YAML frontmatter strings */
 function yamlEscape(str) {
   return str.replace(/"/g, '\\"');
@@ -221,7 +232,7 @@ function transformRetro(record) {
 }
 
 function transformGoal(record, themeLookup) {
-  const rawTitle = record["Goal"] || "";
+  const rawTitle = titleOf(record);
   const cleanTitle = rawTitle
     .replace(/^\?\?\?\s*/, "")
     .replace(/\(([^)]+)\)/, "$1")
@@ -264,7 +275,7 @@ function transformGoal(record, themeLookup) {
 }
 
 function transformTheme(record, goalLookup) {
-  const title = record["Epic"] || "";
+  const title = titleOf(record);
   const slug = slugify(title);
 
   const goalIds = record["🏆 2026 Goals"] || [];
@@ -331,7 +342,7 @@ function syncGoals(goals, themes) {
 
   const themeLookup = {};
   for (const theme of themes) {
-    themeLookup[theme._notionId] = slugify(theme["Epic"] || "");
+    themeLookup[theme._notionId] = slugify(titleOf(theme));
   }
 
   const seenSlugs = new Set();
@@ -354,7 +365,7 @@ function syncGoals(goals, themes) {
         results.skipped++;
       }
     } catch (err) {
-      results.errors.push(`${record["Goal"]}: ${err.message}`);
+      results.errors.push(`${titleOf(record)}: ${err.message}`);
     }
   }
 
@@ -368,7 +379,7 @@ function syncThemes(themes, goals) {
 
   const goalLookup = {};
   for (const goal of goals) {
-    goalLookup[goal._notionId] = slugify(goal["Goal"] || "");
+    goalLookup[goal._notionId] = slugify(titleOf(goal));
   }
 
   for (const record of themes) {
@@ -381,7 +392,7 @@ function syncThemes(themes, goals) {
         results.skipped++;
       }
     } catch (err) {
-      results.errors.push(`${record["Epic"]}: ${err.message}`);
+      results.errors.push(`${titleOf(record)}: ${err.message}`);
     }
   }
 
@@ -396,7 +407,7 @@ function syncPersonalProjects(projects, goals, { dryRun = false } = {}) {
 
   const goalLookup = {};
   for (const goal of goals) {
-    goalLookup[normalizeNotionId(goal._notionId)] = slugify(goal["Goal"] || "");
+    goalLookup[normalizeNotionId(goal._notionId)] = slugify(titleOf(goal));
   }
 
   const projectLookup = {};
