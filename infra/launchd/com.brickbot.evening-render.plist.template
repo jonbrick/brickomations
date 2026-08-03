@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.brickbot.evening-render</string>
+
+    <!-- Fills the daily note's ### Completed Tasks / ### Completed Events from the -->
+    <!-- freshly-synced Notion snapshot (data/life.json, data/plan.json). Fires at   -->
+    <!-- 21:15 — AFTER the 9 PM `yarn sync` refreshes the JSON and the 9 PM           -->
+    <!-- evening-processor writes meeting recaps, and BEFORE the 9:20 PM evening      -->
+    <!-- text reads the note. No wakelock: 21:15 sits inside the daily caffeinate     -->
+    <!-- window (06:00-23:30) and the script exits in ~1 sec. No heartbeat: the       -->
+    <!-- 9:20 text is the downstream success signal — empty Completed sections are    -->
+    <!-- self-evident in the delivered text.                                          -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/node</string>
+        <string>__HOME__/projects/brickbot/scripts/render-evening-report.js</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>21</integer>
+        <key>Minute</key><integer>15</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/projects/brickbot/local/logs/launchd-stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/projects/brickbot/local/logs/launchd-stderr.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>__HOME__/projects/brickbot</string>
+</dict>
+</plist>
