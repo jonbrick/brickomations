@@ -126,11 +126,28 @@ function cleanInline(text) {
 }
 
 // Non-blank, non-comment content of a subsection body (raw, pre-clean).
+// Skips whole HTML comment blocks, including multi-line ones — their interior
+// lines don't start with `<!--`, and letting them through made a placeholder-only
+// section (a template comment above `_no meetings_`) read as real content, which
+// defeated both this-section suppression and the empty-night suppress. Mirrors the
+// inComment tracking in cleanBody().
 function realBodyLines(rawBody) {
-  return rawBody
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .filter((l) => !l.startsWith("<!--") && !l.startsWith("-->"));
+  const out = [];
+  let inComment = false;
+  for (const raw of rawBody) {
+    const l = raw.trim();
+    if (inComment) {
+      if (l.includes("-->")) inComment = false;
+      continue;
+    }
+    if (l.includes("<!--")) {
+      if (!l.includes("-->")) inComment = true; // single-line comment closes on this line
+      continue;
+    }
+    if (!l) continue;
+    out.push(l);
+  }
+  return out;
 }
 
 // A subsection whose only content is italic placeholders (e.g. "_no meetings_")
