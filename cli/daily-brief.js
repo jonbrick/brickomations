@@ -69,6 +69,9 @@ function getTasks(life, date) {
   return (life.tasks || [])
     .filter((t) => t["Due Date"] === date)
     .map((t) => ({
+      // Carried through so the evening renderer can join plan→actual by Notion
+      // ID (survives a same-day rename); it falls back to title when absent.
+      _notionId: t._notionId,
       title: (t.Task || "").trim(),
       status: stripEmoji(t.Status),
       category: stripEmoji(t.Category),
