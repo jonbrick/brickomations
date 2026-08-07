@@ -28,6 +28,16 @@ const PLUMBING_KEYS = new Set([
 const WEEKS_RELATION = "⏰ 2026 Weeks";
 const MONTHS_RELATION = "🗓️ 2026 Months";
 
+// Forward-lookahead window for events/trips past the target week (3 weeks).
+const LOOKAHEAD_DAYS = 21;
+
+// Day math on YYYY-MM-DD strings (UTC — no timezone drift).
+function addDays(ymd, n) {
+  const [y, m, d] = String(ymd).slice(0, 10).split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + n));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+}
+
 function strip(record) {
   if (!record || typeof record !== "object") return record;
   const out = {};
@@ -114,6 +124,78 @@ function habitActuals(calendar, start, end) {
   return out;
 }
 
+// Metric habits — sleep / weight / BP — live in collected.json (Oura, Withings),
+// NOT on the 11 habit calendars, so habitActuals() never sees them. Surfaced so
+// the current-week readout is as complete as the calendar streams already are
+// (workouts come through because they're a calendar; sleep/weight/BP don't).
+// Withings/BP can log multiple readings a day → keep the last one per day.
+function metricActuals(collected, start, end) {
+  const inSpan = (d) =>
+    typeof d === "string" && d.slice(0, 10) >= start && d.slice(0, 10) <= end;
+
+  const sleep = (collected.oura || [])
+    .filter((o) => inSpan(o["Night of Date"]))
+    .map((o) => ({
+      date: String(o["Night of Date"]).slice(0, 10),
+      hours: o["Sleep Duration"],
+      efficiency: o["Efficiency"],
+      readiness: o["Readiness Score"],
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const lastPerDay = (rows, pick) => {
+    const byDay = new Map();
+    for (const r of rows || []) {
+      if (!inSpan(r["Date"])) continue;
+      byDay.set(String(r["Date"]).slice(0, 10), pick(r)); // later row wins
+    }
+    return [...byDay.entries()]
+      .map(([date, v]) => ({ date, ...v }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  };
+
+  const weight = lastPerDay(collected.withings, (w) => ({ lbs: w["Weight"] }));
+  const bloodPressure = lastPerDay(collected.bloodPressure, (b) => ({
+    systolic: b["Systolic Pressure"],
+    diastolic: b["Diastolic Pressure"],
+    pulse: b["Pulse"],
+  }));
+
+  return { sleep, weight, bloodPressure };
+}
+
+// Forward lookahead — events/trips in the [weekEnd+1 .. weekEnd+days] window, so
+// this week's plan can see what's coming (a trip next week, a concert in three).
+// Separate from the target-week events/trips; chronological, plumbing stripped.
+function upcomingEventsTrips(plan, weekEnd, days) {
+  const from = addDays(weekEnd, 1);
+  const to = addDays(weekEnd, days);
+  const pickDate = (r, keys) => {
+    for (const k of keys) {
+      const v = r[k];
+      if (typeof v === "string" && v.length >= 10) return v.slice(0, 10);
+    }
+    return null;
+  };
+  const within = (r, keys) => {
+    const d = pickDate(r, keys);
+    return d && d >= from && d <= to ? d : null;
+  };
+  const collect = (rows, keys) =>
+    (rows || [])
+      .map((r) => ({ d: within(r, keys), r }))
+      .filter((x) => x.d)
+      .sort((a, b) => a.d.localeCompare(b.d))
+      .map((x) => strip(x.r));
+  return {
+    from,
+    to,
+    days,
+    events: collect(plan.events, ["Date"]),
+    trips: collect(plan.trips, ["Date", "Start", "Start Date"]),
+  };
+}
+
 function loadJson(name) {
   return require(path.join(__dirname, "..", "data", name));
 }
@@ -122,6 +204,7 @@ function buildBundle(wk) {
   const plan = loadJson("plan.json");
   const life = loadJson("life.json");
   const calendar = loadJson("calendar.json");
+  const collected = loadJson("collected.json");
   const retro = loadJson("retro.json");
 
   // Linear caches (yarn pull:linear) may be absent until the first
@@ -243,6 +326,8 @@ function buildBundle(wk) {
     calendarBlocks,
     events,
     trips,
+    // Forward events/trips past the target week — planning lookahead.
+    upcoming: upcomingEventsTrips(plan, end, LOOKAHEAD_DAYS),
     existingState: {
       rocks: {
         personal: rocksForWeek
@@ -257,6 +342,9 @@ function buildBundle(wk) {
       // What's already happened this week on the habit calendars — empty for
       // future days, filled for past ones (the catch-up-run signal).
       habitActuals: habitActuals(calendar, start, end),
+      // Metric habits (sleep / weight / BP) from collected.json — the streams
+      // that don't live on a habit calendar. Same current-week span.
+      metrics: metricActuals(collected, start, end),
       // _notionId kept: /plan-week writes this week's numbers + Status to it.
       habitsPlan:
         joinByWeek(life.habitsPlan, weekNotionId).map(stripKeepId)[0] || null,
