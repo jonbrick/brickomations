@@ -78,6 +78,42 @@ function calSlim(ev) {
   };
 }
 
+// The 11 dedicated habit calendars, keyed by their 🌱 2026 Weeks Plan - Personal
+// column name so the render — and the habit walk — line up 1:1 with the
+// numbers written back. Streams live in calendar.json beside the main cals.
+const HABIT_STREAMS = {
+  "Workout Days": "workout",
+  "Sober Days": "sober",
+  "Drinking Days": "drinking",
+  "Cooking Days": "cooking",
+  "Early Wakeup Days": "normalWakeUp",
+  "Meditation Days": "meditation",
+  "Reading Days": "reading",
+  "Coding Days": "coding",
+  "Music Days": "music",
+  "Art Days": "art",
+  "Video Games Days": "videoGames",
+};
+
+// Per-habit actuals within a span → {label: [{date, summary}]}, keyed by
+// 🌱 Weeks Plan - Personal column name. The habit calendars hold the PAST
+// (actuals): future days
+// come back empty by design — on a catch-up run the past is already filled
+// in, so the walk proposes from real actuals instead of a blank plan row.
+function habitActuals(calendar, start, end) {
+  const out = {};
+  for (const [label, key] of Object.entries(HABIT_STREAMS)) {
+    out[label] = (calendar[key] || [])
+      .filter((e) => calEventInSpan(e, start, end))
+      .map((e) => ({
+        date: String(e.start || "").slice(0, 10),
+        summary: String(e.summary || "").trim(),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
+  return out;
+}
+
 function loadJson(name) {
   return require(path.join(__dirname, "..", "data", name));
 }
@@ -218,9 +254,17 @@ function buildBundle(wk) {
       },
       soberDrinking,
       plannedBlocks,
+      // What's already happened this week on the habit calendars — empty for
+      // future days, filled for past ones (the catch-up-run signal).
+      habitActuals: habitActuals(calendar, start, end),
       // _notionId kept: /plan-week writes this week's numbers + Status to it.
       habitsPlan:
         joinByWeek(life.habitsPlan, weekNotionId).map(stripKeepId)[0] || null,
+      // Work Week Plan row (lanes + Status). Null until WORK_WEEKS_PLAN_DATABASE_ID
+      // is set and pulled; /plan-week + /retro-week fall back to an MCP lookup.
+      workPlan: life.workWeeksPlan
+        ? joinByWeek(life.workWeeksPlan, weekNotionId).map(stripKeepId)[0] || null
+        : null,
     },
     inputs: {
       goals: (life.goals || [])
@@ -257,6 +301,8 @@ function buildBundle(wk) {
       priorWeek: priorWeekNotionId
         ? {
             number: wk - 1,
+            start: priorWeekRecord["Date Range (SET)"] || null,
+            end: priorWeekRecord["Date Range (SET) End"] || null,
             retros: {
               personal:
                 strip(joinByWeek(retro.personalWeekly, priorWeekNotionId)[0]) ||
@@ -269,6 +315,17 @@ function buildBundle(wk) {
             // Prior week's numbers are the defaults for the habit walk.
             habitsPlan:
               strip(joinByWeek(life.habitsPlan, priorWeekNotionId)[0]) || null,
+            // Prior week's real actuals from the dedicated habit calendars —
+            // the better default when the 🌱 plan row is blank (unplanned week).
+            habitActuals:
+              priorWeekRecord["Date Range (SET)"] &&
+              priorWeekRecord["Date Range (SET) End"]
+                ? habitActuals(
+                    calendar,
+                    priorWeekRecord["Date Range (SET)"],
+                    priorWeekRecord["Date Range (SET) End"]
+                  )
+                : null,
           }
         : null,
       themes: (life.themes || []).map(strip),

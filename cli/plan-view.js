@@ -86,6 +86,47 @@ function pick(obj, keys) {
   return "";
 }
 
+// Render a {label: [{date, summary}]} habit-actuals map (from buildBundle's
+// habitActuals) as compact indented lines: one line per habit that fired,
+// then a single "none:" roll-up for the streams with nothing. Uniform
+// summaries collapse into a trailing "(…)"; mixed ones annotate each day.
+const HABIT_LABEL = (k) => String(k).replace(/ Days$/, "");
+function habitActualsLines(actuals, indent = "      ") {
+  if (!actuals) return [`${indent}(none in cache)`];
+  const shortDay = (d) => WEEKDAYS[weekdayOf(d)];
+  const lines = [];
+  const empty = [];
+  for (const [label, evs] of Object.entries(actuals)) {
+    const disp = HABIT_LABEL(label);
+    if (!evs || !evs.length) {
+      empty.push(disp);
+      continue;
+    }
+    // Every 🌱 Weeks Plan - Personal column is a DAY count — collapse multiple same-day events
+    // (a bar A → bar B night is one drinking day) and stamp the total.
+    const byDay = new Map();
+    for (const e of evs) {
+      if (!byDay.has(e.date)) byDay.set(e.date, new Set());
+      if (e.summary) byDay.get(e.date).add(e.summary);
+    }
+    const days = [...byDay.keys()].sort();
+    const summaries = [...new Set(evs.map((e) => e.summary).filter(Boolean))];
+    let val;
+    if (summaries.length <= 1) {
+      const s = summaries[0] ? `   (${summaries[0]})` : "";
+      val = `${days.map(shortDay).join(" · ")}${s}`;
+    } else {
+      val = days
+        .map((d) => `${shortDay(d)}(${[...byDay.get(d)].join(" + ")})`)
+        .join(" · ");
+    }
+    lines.push(`${indent}${disp.padEnd(13)} ${val}  [${days.length}d]`);
+  }
+  if (!lines.length) lines.push(`${indent}(nothing logged yet)`);
+  if (empty.length) lines.push(`${indent}none: ${empty.join(" · ")}`);
+  return lines;
+}
+
 function render(b) {
   const out = [];
   const P = (s = "") => out.push(s);
@@ -178,12 +219,25 @@ function render(b) {
   for (const pb of orderEvents(es.plannedBlocks))
     P(`      ${pretty(ymd(pb.start))} ${timeOf(pb)}  ${pb.summary}`);
   P(
-    `  😤 Habits Plan row: ${
+    `  🌱 Personal Week Plan row: ${
       es.habitsPlan
         ? `loaded (Status ${es.habitsPlan.Status || "?"})`
         : "NOT in bundle (habitsPlan=null — fetch the week's row via Notion MCP at write)"
     }`
   );
+  P(
+    `  💼 Work Week Plan row: ${
+      es.workPlan
+        ? `loaded (Status ${es.workPlan.Status || "?"})`
+        : "not pulled (workPlan=null — fetch the week's row via Notion MCP at write)"
+    }`
+  );
+
+  // ---------- HABITS SO FAR (this week's actuals) ----------
+  P("");
+  P(RULE);
+  P("HABITS SO FAR   (this week's actuals · dedicated habit calendars)");
+  for (const ln of habitActualsLines(es.habitActuals)) P(ln);
 
   // ---------- PRIOR WEEK (habit-walk defaults) ----------
   const pw = b.inputs.priorWeek;
@@ -205,8 +259,10 @@ function render(b) {
       for (const ln of String(roll).split("\n"))
         if (ln.trim() && ln.trim() !== "*****") P(`      ${ln.trim()}`);
     P(
-      `  😤 prior habits plan: ${pw.habitsPlan ? "present" : "null (no plan-side defaults; use actuals above)"}`
+      `  🌱 prior personal plan: ${pw.habitsPlan ? "present" : "null (no plan-side defaults; use actuals below)"}`
     );
+    P(`  Habit actuals (from calendars):`);
+    for (const ln of habitActualsLines(pw.habitActuals)) P(ln);
   }
 
   P("");
