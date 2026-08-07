@@ -26,7 +26,6 @@ const WORK_TASK_CATEGORY_MAPPING = {
 };
 
 const PERSONAL_TASK_CATEGORY_MAPPING = {
-  "💻 Coding": "coding",
   "📝 Admin": "admin",
 };
 
@@ -72,7 +71,7 @@ function getWorkCategoryKey(workCategory) {
 
 /**
  * Get personal sub-category key from Personal Category property value
- * @param {string|null|undefined} personalCategory - Personal Category property value (e.g., "💻 Coding", "📝 Admin")
+ * @param {string|null|undefined} personalCategory - Personal Category property value (e.g., "📝 Admin")
  * @returns {string|null} Category key (e.g., "coding", "admin") or null if unmapped
  */
 function getPersonalCategoryKey(personalCategory) {

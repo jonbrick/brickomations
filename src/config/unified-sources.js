@@ -2300,7 +2300,6 @@ const MONTHLY_RECAP_TASK_PROPERTIES = {
       name: "Mental Health Task Details",
     },
     admin: { key: "personalAdminTasks", name: "Admin Task Details" },
-    coding: { key: "personalCodingTasks", name: "Coding Task Details" },
   },
   work: {
     design: { key: "workDesignTasks", name: "Design Task Details" },
