@@ -127,6 +127,54 @@ function habitActualsLines(actuals, indent = "      ") {
   return lines;
 }
 
+// Metric habits (sleep / weight / BP) — the actuals that live in Oura/Withings,
+// not on a habit calendar. Rendered alongside the calendar streams so the
+// current-week readout is complete. Sleep: per-night hrs/eff + a week average.
+const round1 = (n) => (n == null ? null : Math.round(n * 10) / 10);
+const avg = (nums) =>
+  nums.length ? round1(nums.reduce((a, b) => a + b, 0) / nums.length) : null;
+function metricLines(m, indent = "      ") {
+  if (!m) return [`${indent}(metrics not in cache)`];
+  const lines = [];
+  const shortDay = (d) => WEEKDAYS[weekdayOf(d)];
+  const pad = (s) => s.padEnd(13); // matches habitActualsLines' label width
+
+  if (m.sleep && m.sleep.length) {
+    const perNight = m.sleep
+      .map((s) => `${shortDay(s.date)} ${round1(s.hours)}h/${s.efficiency}%`)
+      .join(" · ");
+    const avgH = avg(m.sleep.map((s) => s.hours).filter((x) => x != null));
+    const avgE = avg(m.sleep.map((s) => s.efficiency).filter((x) => x != null));
+    lines.push(`${indent}${pad("Sleep")} ${perNight}`);
+    lines.push(
+      `${indent}${pad("")} avg ${avgH}h · ${avgE}% eff  [${m.sleep.length} nights]`
+    );
+  } else {
+    lines.push(`${indent}${pad("Sleep")} (none in cache)`);
+  }
+
+  if (m.weight && m.weight.length) {
+    const perDay = m.weight
+      .map((w) => `${shortDay(w.date)} ${round1(w.lbs)}`)
+      .join(" · ");
+    const avgW = avg(m.weight.map((w) => w.lbs).filter((x) => x != null));
+    lines.push(`${indent}${pad("Weight")} ${perDay}  ·  avg ${avgW} lbs`);
+  } else {
+    lines.push(`${indent}${pad("Weight")} (none in cache)`);
+  }
+
+  if (m.bloodPressure && m.bloodPressure.length) {
+    const perDay = m.bloodPressure
+      .map((b) => `${shortDay(b.date)} ${b.systolic}/${b.diastolic}`)
+      .join(" · ");
+    lines.push(`${indent}${pad("BP")} ${perDay}`);
+  } else {
+    lines.push(`${indent}${pad("BP")} (none this week)`);
+  }
+
+  return lines;
+}
+
 function render(b) {
   const out = [];
   const P = (s = "") => out.push(s);
@@ -204,6 +252,39 @@ function render(b) {
     P(`    ${name}${start ? `  — starts ${start}` : ""}${tags ? `  (${tags})` : ""}`);
   }
 
+  // ---------- UPCOMING (lookahead past the target week) ----------
+  const up = b.upcoming;
+  if (up) {
+    P("");
+    P(RULE);
+    P(
+      `UPCOMING   (next ${Math.round(up.days / 7)} weeks · ${up.from} → ${up.to})`
+    );
+    P(`  Events (${up.events.length})`);
+    for (const e of up.events) {
+      const name = pick(e, ["Event Name", "Event", "title", "Name"]);
+      const date = ymd(pick(e, ["Date"]));
+      const tags = [e.Category, e.Subcategory, e.Status]
+        .filter(Boolean)
+        .join(" · ");
+      P(`      ${date ? pretty(date) : ""}  ${name}${tags ? `  (${tags})` : ""}`);
+    }
+    P(`  Trips (${up.trips.length})`);
+    for (const t of up.trips) {
+      const name = pick(t, ["Trip Name", "Trip", "title", "Name"]);
+      const start = ymd(pick(t, ["Date", "Start", "Start Date"]));
+      const endd = ymd(pick(t, ["Date End", "End"]));
+      const span = start
+        ? `${pretty(start)}${endd && endd !== start ? `–${pretty(endd)}` : ""}`
+        : "";
+      const tags = []
+        .concat(t.Subcategory || [], t.Status || [])
+        .filter(Boolean)
+        .join(" · ");
+      P(`      ${span}  ${name}${tags ? `  (${tags})` : ""}`);
+    }
+  }
+
   // ---------- EXISTING OUTCOMES ----------
   const es = b.existingState;
   P("");
@@ -236,8 +317,9 @@ function render(b) {
   // ---------- HABITS SO FAR (this week's actuals) ----------
   P("");
   P(RULE);
-  P("HABITS SO FAR   (this week's actuals · dedicated habit calendars)");
+  P("HABITS SO FAR   (this week's actuals · habit calendars + Oura/Withings)");
   for (const ln of habitActualsLines(es.habitActuals)) P(ln);
+  for (const ln of metricLines(es.metrics)) P(ln);
 
   // ---------- PRIOR WEEK (habit-walk defaults) ----------
   const pw = b.inputs.priorWeek;
