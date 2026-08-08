@@ -74,6 +74,7 @@ function getTasks(life, date) {
       _notionId: t._notionId,
       title: (t.Task || "").trim(),
       status: stripEmoji(t.Status),
+      priority: stripEmoji(t.Priority),
       category: stripEmoji(t.Category),
       personal_category: stripEmoji(t["PERSONAL Category"]),
       work_category: stripEmoji(t["WORK Category"]),
@@ -109,6 +110,14 @@ function getEvents(plan, date) {
     }));
 }
 
+/** My RSVP on a calendar event. A block with no `self` attendee (0 attendees,
+ *  or attendees but none is me) is one I authored — intrinsically accepted,
+ *  but kept distinct so consumers can tell an invite from my own block. */
+function getMyResponse(attendees) {
+  const me = (attendees || []).find((a) => a.self === true);
+  return me ? me.response || "needsAction" : "self-authored";
+}
+
 /** Today's time-shaped events from Google Calendar (work + personal, all calendars). */
 function getCalendarBlocks(calendar, date) {
   const blocks = [];
@@ -126,6 +135,7 @@ function getCalendarBlocks(calendar, date) {
         end: e.end || "",
         location: e.location || "",
         attendees: e.attendees || [],
+        my_response: getMyResponse(e.attendees),
       });
     }
   }
