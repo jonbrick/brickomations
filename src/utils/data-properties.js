@@ -32,8 +32,10 @@ function buildDataProperties(summaryData, props, selectedSources = []) {
             // Determine default value based on field type
             if (fieldKey.endsWith('Blocks') || fieldKey.endsWith('Details')) {
               summaryData[fieldKey] = ''; // Empty string for text fields
+            } else if (fieldKey.endsWith('Average') || fieldKey.startsWith('avg')) {
+              summaryData[fieldKey] = null; // Averages: no data is blank, not zero
             } else {
-              summaryData[fieldKey] = 0; // Zero for number fields
+              summaryData[fieldKey] = 0; // Zero for count/total fields
             }
           }
         });
@@ -65,12 +67,18 @@ function buildDataProperties(summaryData, props, selectedSources = []) {
   Object.entries(summaryData).forEach(([key, value]) => {
     // Skip undefined values and metadata fields
     if (value === undefined || key === 'weekNumber' || key === 'year') return;
-    
+
     const propConfig = props[key];
     const propName = getPropName(key, propConfig);
-    
+
     if (propName) {
-      properties[propName] = value;
+      // A null number must reach Notion as an explicit clear —
+      // _formatProperties drops bare nulls, which would leave stale values.
+      if (value === null && propConfig && propConfig.type === 'number') {
+        properties[propName] = { number: null };
+      } else {
+        properties[propName] = value;
+      }
     }
   });
   

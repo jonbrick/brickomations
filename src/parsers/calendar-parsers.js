@@ -33,7 +33,9 @@ function weightParser(calendarEvents, isDateInWeek, group) {
       bodyWeightAverage: Math.round((sum / weights.length) * 10) / 10,
     };
   } else {
-    return { bodyWeightAverage: 0 };
+    // No weigh-ins: null clears the Notion property. A written 0 counts as a
+    // data point in the monthly rollup mean; a blank week is ignored.
+    return { bodyWeightAverage: null };
   }
 }
 
@@ -79,16 +81,18 @@ function bloodPressureParser(calendarEvents, isDateInWeek, group) {
       avgSystolic:
         systolicCount > 0
           ? Math.round((systolicSum / systolicCount) * 10) / 10
-          : 0,
+          : null,
       avgDiastolic:
         diastolicCount > 0
           ? Math.round((diastolicSum / diastolicCount) * 10) / 10
-          : 0,
+          : null,
     };
   } else {
+    // No readings: null clears the Notion property. A written 0 counts as a
+    // data point in the monthly rollup mean; a blank week is ignored.
     return {
-      avgSystolic: 0,
-      avgDiastolic: 0,
+      avgSystolic: null,
+      avgDiastolic: null,
     };
   }
 }
