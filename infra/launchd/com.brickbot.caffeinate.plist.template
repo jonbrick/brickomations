@@ -5,18 +5,18 @@
     <key>Label</key>
     <string>com.brickbot.caffeinate</string>
 
-    <!-- Holds idle sleep off from 06:00 to 23:30 daily so the mini stays    -->
+    <!-- Holds idle sleep off from 05:45 to 23:30 daily so the mini stays    -->
     <!-- discoverable for AirDrop / SSH / general "just need to talk to it"  -->
     <!-- usage during waking hours. The 23:30 end clears the 23:00 yarn sync -->
     <!-- 15-min hard timeout (typical 2-3 min, worst observed 6 min).        -->
     <!--                                                                      -->
     <!-- RunAtLoad: true covers mid-day reboots (e.g., power-loss            -->
     <!-- autorestart). The wrapper script exits cleanly if fired outside the -->
-    <!-- 06:00-23:30 window, so re-firing is always safe.                    -->
+    <!-- 05:45-23:30 window, so re-firing is always safe.                    -->
     <!--                                                                      -->
     <!-- launchd does NOT wake a sleeping Mac for StartCalendarInterval, so  -->
-    <!-- the recurring `pmset repeat wakeorpoweron MTWRFSU 06:00:00` is the  -->
-    <!-- thing that gets this job firing at 06:00.                            -->
+    <!-- the recurring `pmset repeat wakeorpoweron MTWRFSU 05:45:00` is the  -->
+    <!-- thing that gets this job firing at 05:45.                            -->
     <key>ProgramArguments</key>
     <array>
         <string>__HOME__/projects/brickbot/scripts/hold-awake-until-bedtime.sh</string>
@@ -25,9 +25,9 @@
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
-        <integer>6</integer>
+        <integer>5</integer>
         <key>Minute</key>
-        <integer>0</integer>
+        <integer>45</integer>
     </dict>
 
     <key>RunAtLoad</key>

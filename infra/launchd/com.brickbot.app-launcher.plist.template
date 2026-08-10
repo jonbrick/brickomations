@@ -12,13 +12,13 @@
 
     <!-- Fires before each Cowork event so Claude Desktop is up. `open -a` is -->
     <!-- idempotent so we can safely fire both apps each time.                -->
-    <!--  6:55 AM — before 7 AM Cowork morning-brief                          -->
+    <!--  5:55 AM — before 6 AM Cowork morning-brief                          -->
     <!--  8:55 PM — before 9 PM Cowork evening-processor                      -->
     <key>StartCalendarInterval</key>
     <array>
         <dict>
             <key>Hour</key>
-            <integer>6</integer>
+            <integer>5</integer>
             <key>Minute</key>
             <integer>55</integer>
         </dict>

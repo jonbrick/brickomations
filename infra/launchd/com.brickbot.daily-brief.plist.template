@@ -14,15 +14,15 @@
         <string>__HOME__/projects/brickbot/cli/daily-brief.js</string>
     </array>
 
-    <!-- Single fire at 6:00 AM — separate from `yarn sync`.                      -->
+    <!-- Single fire at 5:50 AM — separate from `yarn sync`.                      -->
     <!-- Reads existing data/*.json (refreshed by 11 PM sync the night before),   -->
     <!-- scans active project folders for `morning_brief:` frontmatter, writes    -->
-    <!-- data/briefs/<today>.json. ~5 sec runtime. Lands ~55 min before the 7 AM  -->
+    <!-- data/briefs/<today>.json. ~5 sec runtime. Lands ~10 min before the 6 AM  -->
     <!-- Cowork morning-brief task that consumes the brief.                       -->
     <key>StartCalendarInterval</key>
     <dict>
-        <key>Hour</key><integer>6</integer>
-        <key>Minute</key><integer>0</integer>
+        <key>Hour</key><integer>5</integer>
+        <key>Minute</key><integer>50</integer>
     </dict>
 
     <key>StandardOutPath</key>

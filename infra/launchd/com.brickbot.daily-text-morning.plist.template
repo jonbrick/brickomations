@@ -7,9 +7,9 @@
 
     <!-- Texts a plain-text digest of today's daily note (morning sections) with  -->
     <!-- a tappable obsidian:// link back into the note. Fires 20 min after the    -->
-    <!-- 7 AM Cowork morning-brief, so the note is already written.                -->
-    <!-- No wakelock wrapper: 07:20 sits inside the daily caffeinate window        -->
-    <!-- (06:00-23:30) and the script exits in seconds (osascript is timeout-      -->
+    <!-- 6 AM Cowork morning-brief, so the note is already written.                -->
+    <!-- No wakelock wrapper: 06:20 sits inside the daily caffeinate window        -->
+    <!-- (05:45-23:30) and the script exits in seconds (osascript is timeout-      -->
     <!-- bounded in the script). No heartbeat/watchdog: the delivered text is its  -->
     <!-- own success signal — a missing text is self-evident.                      -->
     <key>ProgramArguments</key>
@@ -22,7 +22,7 @@
 
     <key>StartCalendarInterval</key>
     <dict>
-        <key>Hour</key><integer>7</integer>
+        <key>Hour</key><integer>6</integer>
         <key>Minute</key><integer>20</integer>
     </dict>
 

@@ -8,7 +8,7 @@
  * reordering, no reworded headers. The note is the source of truth; this script is a
  * read-only mirror. It never edits the note.
  *
- *   morning → ## Morning Brief   (frame · today's tasks · planned events · calendar · training/meals)
+ *   morning → ## Morning Brief   (morning/afternoon/evening frame · birthdays · today's tasks · planned events · calendar · training/meals)
  *   evening → ## Evening Report  (completed tasks · completed events · workout/etc · meeting recaps)
  *
  * Rendering is minimal (content stays 1:1 with the note):
