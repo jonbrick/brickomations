@@ -36,12 +36,12 @@ install_one() {
 }
 
 install_one "com.brickbot.daily"
-install_one "com.brickbot.daily-brief" # pre-stages briefs/<date>.json at 06:00
+install_one "com.brickbot.daily-brief" # pre-stages briefs/<date>.json at 05:50
 install_one "com.brickbot.pull-linear" # caches Linear projects + assigned issues at 06:30
 install_one "com.brickbot.app-launcher"
 install_one "com.brickbot.watchdog"   # push-based heartbeat; reads ping files
-install_one "com.brickbot.caffeinate" # holds idle sleep off 06:00–23:30 daily
-install_one "com.brickbot.daily-text-morning" # texts today's note digest at 07:20
+install_one "com.brickbot.caffeinate" # holds idle sleep off 05:45–23:30 daily
+install_one "com.brickbot.daily-text-morning" # texts today's note digest at 06:20
 install_one "com.brickbot.evening-render"      # fills Completed Tasks/Events at 21:15 (before the evening text)
 install_one "com.brickbot.daily-text-evening"  # texts the day's recaps at 21:20
 
