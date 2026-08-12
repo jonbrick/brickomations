@@ -1,10 +1,12 @@
 // Generic workflow for syncing Notion database records to Google Calendar events
 // Replaces integration-specific workflows: oura, strava, github, steam, withings, bloodPressure
 
+const fs = require("fs");
+const path = require("path");
 const { INTEGRATIONS } = require("../config/unified-sources");
 const config = require("../config");
 const { delay } = require("../utils/async");
-const { formatDate, formatDateOnly } = require("../utils/date");
+const { formatDate, formatDateOnly, getToday } = require("../utils/date");
 const GoogleCalendarService = require("../services/GoogleCalendarService");
 const IntegrationDatabase = require("../databases/IntegrationDatabase");
 const { CALENDAR_SKIP_STATUSES } = require("../config/notion/task-categories");
@@ -56,6 +58,121 @@ function getDisplayName(record, repo, integrationConfig) {
     default:
       return value || "Unknown";
   }
+}
+
+// Change detection for the syncEntireDb sources (Events, Trips). Those DBs are
+// reconciled in full on every run, and the hybrid path used to re-push every
+// record unconditionally — getEvent → updateEvent → markSynced → 350ms delay,
+// ~1.6s per record. At 207 events that consumed the whole `update` step budget
+// and the step was SIGTERM'd (2026-08-12). Records whose calendar event already
+// matches what we would write are now skipped outright: no API calls, no Notion
+// write-back, no rate-limit delay.
+//
+// Both transformers emit all-day events with a fixed, fully deterministic field
+// set (summary, description, start.date, end.date, optional colorId), so there
+// is no dateTime/timezone normalization to get wrong here. Anything unexpected —
+// a missing event, a dateTime-shaped event, a cancelled event — returns false and
+// falls through to the existing write path. This may only ever skip a write; it
+// can never redirect one.
+const COMPARED_TEXT_FIELDS = ["summary", "description", "colorId"];
+
+/**
+ * Normalize a comparable field for equality testing.
+ * Google omits empty description/colorId rather than returning "", while the
+ * transformers produce "" for an empty description; treat those alike. Google
+ * also echoes descriptions back with CRLF line endings.
+ * @param {*} value
+ * @returns {string}
+ */
+function normalizeComparable(value) {
+  if (value === undefined || value === null) return "";
+  return String(value).replace(/\r\n/g, "\n").trim();
+}
+
+/**
+ * True only when the existing calendar event already matches the event we would
+ * write. Biased to returning false: any doubt means take the write path.
+ * @param {Object|null} existing - Event as returned by Google Calendar
+ * @param {Object} event - Event produced by the transformer
+ * @returns {boolean}
+ */
+function eventMatchesExisting(existing, event) {
+  if (!existing || !event) return false;
+  // A cancelled event is never up to date.
+  if (existing.status === "cancelled") return false;
+  // All-day shape only — a dateTime on either side is outside what we compare.
+  if (existing.start?.dateTime || existing.end?.dateTime) return false;
+  if (event.start?.dateTime || event.end?.dateTime) return false;
+  if (!existing.start?.date || !existing.end?.date) return false;
+  if (!event.start?.date || !event.end?.date) return false;
+  if (existing.start.date !== event.start.date) return false;
+  if (existing.end.date !== event.end.date) return false;
+  return COMPARED_TEXT_FIELDS.every(
+    (field) =>
+      normalizeComparable(existing[field]) === normalizeComparable(event[field])
+  );
+}
+
+/**
+ * Resolve the change-detection mode.
+ * "shadow" (default) computes the decision and reports what it would have
+ * skipped, but still performs every write — so the fast path can be validated
+ * against real runs before it takes effect. "on" enables skipping. "off"
+ * restores the previous unconditional behavior.
+ * @returns {"on"|"shadow"|"off"}
+ */
+function getChangeDetectionMode() {
+  const raw = (process.env.SYNC_CHANGE_DETECTION || "shadow").toLowerCase();
+  return ["on", "shadow", "off"].includes(raw) ? raw : "shadow";
+}
+
+// Daily full-resync backstop. The fast path above trusts a field comparison;
+// this guarantees that anything it fails to notice is corrected within a day.
+// Keyed off a stamp file rather than launchd's 07:00 slot so that a missed or
+// retimed run self-heals on the next one instead of skipping a day.
+const FULL_RESYNC_STAMP = path.join(
+  __dirname,
+  "..",
+  "..",
+  "local",
+  "last-full-resync"
+);
+
+// Memoized per process so every source in one `update` run shares the decision —
+// otherwise the first source would consume the stamp and the rest would take the
+// fast path on what is supposed to be the full pass.
+let fullResyncDecision = null;
+
+/**
+ * True when this process should write every record unconditionally.
+ * Fails safe: if the stamp can't be read or written, resync.
+ * @returns {boolean}
+ */
+function isFullResyncDue() {
+  if (fullResyncDecision !== null) return fullResyncDecision;
+
+  const today = formatDateOnly(getToday());
+  let last = null;
+  try {
+    last = fs.readFileSync(FULL_RESYNC_STAMP, "utf8").trim();
+  } catch {
+    // No stamp yet — this run becomes the day's full resync.
+  }
+
+  fullResyncDecision = last !== today;
+
+  if (fullResyncDecision) {
+    try {
+      fs.mkdirSync(path.dirname(FULL_RESYNC_STAMP), { recursive: true });
+      fs.writeFileSync(FULL_RESYNC_STAMP, today);
+    } catch {
+      // Can't persist the stamp — keep resyncing every run rather than
+      // silently trusting the fast path forever.
+      fullResyncDecision = true;
+    }
+  }
+
+  return fullResyncDecision;
 }
 
 /**
@@ -253,10 +370,38 @@ async function syncToCalendar(integrationId, startDate, endDate, options = {}) {
   const results = {
     created: [],
     skipped: [],
+    unchanged: [],
     errors: [],
     deleted: [],
     total: 0,
   };
+
+  // Change detection applies only to the full-DB reconcile sources, which are the
+  // ones paying the unconditional re-write cost. Windowed sources already fetch
+  // only unsynced records.
+  const changeDetectionMode = getChangeDetectionMode();
+  const isFullDbSource = integrationConfig.databaseConfig?.syncEntireDb === true;
+  // Once a day, write everything regardless of comparison — the backstop that
+  // makes trusting the fast path the rest of the day safe.
+  const fullResyncDue =
+    isFullDbSource && changeDetectionMode !== "off" && isFullResyncDue();
+  const useChangeDetection =
+    changeDetectionMode !== "off" && isFullDbSource && !fullResyncDue;
+  let unchangedMatches = 0;
+
+  // One listEvents call per calendar, reused for every record. The cleanup phase
+  // already lists this same range, so this reuses an established access pattern
+  // rather than adding a per-record getEvent.
+  const existingEventsByCalendar = new Map();
+  async function getExistingEventsById(calService, calId) {
+    if (!existingEventsByCalendar.has(calId)) {
+      const events = await calService.listEvents(calId, startDate, endDate);
+      const byId = new Map();
+      for (const existing of events) byId.set(existing.id, existing);
+      existingEventsByCalendar.set(calId, byId);
+    }
+    return existingEventsByCalendar.get(calId);
+  }
 
   // Determine which pattern to use: event ID (text property) or checkbox
   const useEventIdPattern =
@@ -324,6 +469,37 @@ async function syncToCalendar(integrationId, startDate, endDate, options = {}) {
 
         if (!calService) {
           throw new Error(`Invalid account type: ${accountType}`);
+        }
+
+        // Fast path: the calendar already holds exactly what we would write.
+        // Skip the update, the Notion write-back, and the rate-limit delay.
+        if (useChangeDetection && useHybridPattern && existingEventId) {
+          let known = null;
+          try {
+            const byId = await getExistingEventsById(calService, calendarId);
+            known = byId.get(existingEventId) || null;
+          } catch {
+            // Listing failed — fall through to the unconditional write path.
+            known = null;
+          }
+          if (eventMatchesExisting(known, event)) {
+            unchangedMatches++;
+            if (changeDetectionMode === "on") {
+              results.unchanged.push({
+                pageId: record.id,
+                eventId: existingEventId,
+                // Carried so the cleanup phase below can resolve its calendar
+                // without a second getAllInDateRange — in steady state every
+                // record is unchanged and results.created is empty.
+                calendarId,
+                displayName:
+                  getDisplayName(record, repo, integrationConfig) ||
+                  event.summary,
+              });
+              continue;
+            }
+            // shadow mode: counted above, but still written below.
+          }
         }
 
         // Create or update calendar event
@@ -411,6 +587,10 @@ async function syncToCalendar(integrationId, startDate, endDate, options = {}) {
       if (results.created.length > 0) {
         // Use calendarId from first created event
         cleanupCalendarId = results.created[0].calendarId;
+      } else if (results.unchanged.length > 0) {
+        // Steady state with change detection on: nothing was written, but the
+        // skipped records know their calendar.
+        cleanupCalendarId = results.unchanged[0].calendarId;
       } else {
         // Resolve calendarId from config (for when no events were created)
         const { resolveCalendarId } = require("../utils/calendar-mapper");
@@ -441,6 +621,14 @@ async function syncToCalendar(integrationId, startDate, endDate, options = {}) {
         error: `Cleanup failed: ${error.message}`,
       });
     }
+  }
+
+  if (isFullDbSource && changeDetectionMode !== "off") {
+    results.changeDetection = {
+      mode: changeDetectionMode,
+      matched: unchangedMatches,
+      fullResync: fullResyncDue,
+    };
   }
 
   return results;

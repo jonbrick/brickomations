@@ -65,9 +65,13 @@ const rangeFlag = dateRangeFlags(range);
 const STEPS = [
   { name: "tokens:refresh", cmd: `${NODE} cli/tokens/refresh.js --auto` },
   { name: "collect", cmd: `${NODE} cli/collect-data.js --auto${rangeFlag}` },
-  // Events/Trips sync their full DB every run (syncEntireDb), adding ~1 min of
-  // calendar re-push to this step; give it headroom over the 3-min default.
-  { name: "update", cmd: `${NODE} cli/update-calendar.js --auto${rangeFlag}`, timeout: 6 * 60 * 1000 },
+  // Events/Trips sync their full DB every run (syncEntireDb); give this step
+  // headroom over the 3-min default. 6 min was breached on 2026-08-12 once the
+  // Events DB reached 207 events (~340s of unconditional re-writes) — see the
+  // change-detection fast path in workflows/notion-databases-to-calendar.js,
+  // which is the actual fix. This margin stays as a backstop for the daily
+  // full-resync run, which still writes everything.
+  { name: "update", cmd: `${NODE} cli/update-calendar.js --auto${rangeFlag}`, timeout: 9 * 60 * 1000 },
   { name: "summarize", cmd: `${NODE} cli/summarize-week.js --auto${rangeFlag}` },
   { name: "aggregate", cmd: `${NODE} cli/aggregate-month.js --auto${rangeFlag}` },
   { name: "pull", cmd: `${NODE} cli/pull.js --auto`, timeout: 8 * 60 * 1000 },
@@ -100,20 +104,47 @@ function cleanOldLogs() {
 }
 
 
+// Cap to keep heartbeat iMessages and console output readable.
+function capDetail(text) {
+  return text.length > 240 ? text.slice(0, 237) + "..." : text;
+}
+
 // Pull a one-line summary out of a failed step's output so failures surface
-// without log-grepping. Prefers lines marked with ❌ or "Error:/Failed:";
+// without log-grepping. Prefers lines marked with ❌ / ✗ or "Error:/Failed:";
 // falls back to the last few non-empty lines.
-function extractErrorDetail(err) {
+//
+// A step killed by its timeout (SIGTERM) prints no error marker at all — its last
+// output is simply the progress line it had reached, which is usually a ✅. Passing
+// that through verbatim produced the 2026-08-12 alert that read
+// "status=failed: ... ✅ 2 records → 11 synced". So signal kills describe themselves
+// by the signal, and ✅ lines are never eligible as a failure explanation.
+function extractErrorDetail(err, step) {
   const text = (err.stderr || err.stdout || err.message || "").toString();
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+
+  if (err.signal) {
+    const limitMin = Math.round((step?.timeout || DEFAULT_TIMEOUT) / 60000);
+    const lastReached = lines[lines.length - 1];
+    return capDetail(
+      `killed by ${err.signal} after ${limitMin}min` +
+        (lastReached ? ` (last reached: ${lastReached})` : "")
+    );
+  }
+
   if (lines.length === 0) return null;
+  // ✗ is cli/pull.js's per-source failure marker; ❌ is used everywhere else.
   const failures = lines.filter(
-    (l) => l.includes("❌") || /^(Error:|Failed:|TypeError:|ReferenceError:)/.test(l)
+    (l) =>
+      l.includes("❌") ||
+      l.includes("✗") ||
+      /^(Error:|Failed:|TypeError:|ReferenceError:)/.test(l)
   );
-  const picked = failures.length > 0 ? failures : lines.slice(-3);
-  // Cap to keep heartbeat iMessages and console output readable.
-  const joined = picked.join(" | ");
-  return joined.length > 240 ? joined.slice(0, 237) + "..." : joined;
+  const picked =
+    failures.length > 0
+      ? failures
+      : lines.filter((l) => !l.startsWith("✅")).slice(-3);
+  if (picked.length === 0) return null;
+  return capDetail(picked.join(" | "));
 }
 
 function sendNotification(title, message) {
@@ -217,9 +248,18 @@ function main() {
       if (autoMode && err.stderr) {
         fs.appendFileSync(logFile, err.stderr);
       }
-      const detail = extractErrorDetail(err);
-      if (detail) errorDetails[step.name] = detail;
+      const detail = extractErrorDetail(err, step);
       const exitInfo = err.signal ? `signal ${err.signal}` : `exit code ${err.status}`;
+      // Signal kills already name themselves ("killed by SIGTERM after Nmin");
+      // exit-code failures get the code prefixed so the heartbeat carries the
+      // reason too, not just the log line.
+      const exitCode = err.status ?? "?";
+      const heartbeatDetail = err.signal
+        ? detail
+        : detail
+        ? `exit ${exitCode}: ${detail}`
+        : `exit ${exitCode}`;
+      if (heartbeatDetail) errorDetails[step.name] = heartbeatDetail;
       log(`ERROR: ${step.name} failed (${exitInfo})${detail ? ` — ${detail}` : ""}`);
       if (step.name === "tokens:refresh") {
         log("Bailing: tokens:refresh failed — network or API likely down");
