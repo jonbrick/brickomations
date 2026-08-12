@@ -188,9 +188,27 @@ function render(b) {
 
   // ---------- DAY BY DAY ----------
   P("");
-  P("DAY BY DAY   (personal + work calendars · ⛔ = DNS/hold · [x] = working loc)");
+  P(
+    "DAY BY DAY   (personal + work calendars · events/trips · ⛔ = DNS/hold · [x] = working loc)"
+  );
   const pers = b.calendarBlocks.personal || [];
   const work = b.calendarBlocks.work || [];
+  // Events/trips are Notion-born and pushed OUT to the 🎟️/✈️ calendars — never
+  // pulled back, so they never reach calendar.json and aren't in calendarBlocks.
+  // They have to be folded in here or a travel day renders as an empty day:
+  // Wk 33 showed a blank Fri/Sat with a multi-day trip sitting 40 lines below.
+  // Date-only by schema (Events have no time; Trips are Date..Date End).
+  const tripSpan = (t) => {
+    const s = ymd(pick(t, ["Date", "Start", "Start Date"]));
+    return { s, e: ymd(pick(t, ["Date End", "End", "End Date"])) || s };
+  };
+  const eventsOn = (day) =>
+    (b.events || []).filter((e) => ymd(pick(e, ["Date"])) === day);
+  const tripsOn = (day) =>
+    (b.trips || []).filter((t) => {
+      const { s, e } = tripSpan(t);
+      return s && day >= s && day <= e;
+    });
   for (const day of eachDay(b.week.start, b.week.end)) {
     const onDay = (arr) => arr.filter((e) => ymd(e.start) === day);
     const wl = [
@@ -202,7 +220,31 @@ function render(b) {
     P(`  ${pretty(day)}${when}${wlTag}`);
     const p = onDay(pers);
     const w = onDay(work).filter((e) => !isWorkingLoc(e));
-    if (!p.length && !w.length) P(`      —`);
+    const ev = eventsOn(day);
+    const tr = tripsOn(day);
+    if (!p.length && !w.length && !ev.length && !tr.length) P(`      —`);
+    // Events/trips first — an all-day state frames the timed blocks under it.
+    if (tr.length || ev.length) {
+      P(`    events & trips`);
+      for (const t of tr) {
+        const { s: ts, e: te } = tripSpan(t);
+        const where = day === ts ? "starts" : day === te ? "ends" : "mid-trip";
+        const name = pick(t, ["Trip Name", "Trip", "title", "Name"]);
+        const tags = [t.Category, t.Subcategory, t.Status]
+          .filter(Boolean)
+          .join(" · ");
+        P(
+          `      ✈️  ${name}  ${pretty(ts)} → ${pretty(te)}  (${where}${tags ? ` · ${tags}` : ""})`
+        );
+      }
+      for (const e of ev) {
+        const name = pick(e, ["Event Name", "Event", "title", "Name"]);
+        const tags = [e.Category, e.Subcategory, e.Status]
+          .filter(Boolean)
+          .join(" · ");
+        P(`      🎟️  ${name}${tags ? `  (${tags})` : ""}`);
+      }
+    }
     if (p.length) {
       P(`    personal`);
       for (const e of orderEvents(p)) P(`      ${lineFor(e)}`);
@@ -247,9 +289,14 @@ function render(b) {
   P(`TRIPS (${b.trips.length})`);
   for (const t of b.trips) {
     const name = pick(t, ["Trip Name", "Trip", "title", "Name"]);
-    const start = ymd(pick(t, ["Start", "Start Date", "Date"]));
-    const tags = [t.Type, t.Status].filter(Boolean).join(" · ");
-    P(`    ${name}${start ? `  — starts ${start}` : ""}${tags ? `  (${tags})` : ""}`);
+    // Show the whole span — the end date is what tells you a trip runs past
+    // the week (a Fri → Sun trip started in Wk 33 lands its end in Wk 34).
+    const { s, e } = tripSpan(t);
+    const span = s ? (e && e !== s ? `  — ${s} → ${e}` : `  — ${s}`) : "";
+    const tags = [t.Category, t.Subcategory, t.Status]
+      .filter(Boolean)
+      .join(" · ");
+    P(`    ${name}${span}${tags ? `  (${tags})` : ""}`);
   }
 
   // ---------- UPCOMING (lookahead past the target week) ----------
