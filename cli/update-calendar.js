@@ -130,12 +130,33 @@ async function handleAllCalendarSyncs(startDate, endDate, action) {
       if (result.fetchedCount === 0) {
         console.log(result.metadata.emptyMessage);
       } else if (action === "sync" && result.results) {
-        const { created, skipped, deleted, errors } = result.results;
+        const { created, skipped, unchanged, deleted, errors, changeDetection } = result.results;
         const recordLabel = result.fetchedCount === 1 ? "record" : "records";
         const deletedCount = deleted?.length || 0;
         const errorCount = errors?.length || 0;
         const errorSection = errorCount > 0 ? ` | ${errorCount} errors` : "";
-        console.log(`✅ ${result.fetchedCount} ${recordLabel} → ${created.length} synced | ${skipped.length} skipped | ${deletedCount} deleted${errorSection}\n`);
+        // Unchanged is reported separately from skipped: skipped means the record
+        // was unusable (missing date/name), unchanged means the calendar was
+        // already correct. Collapsing them would hide a drop in write volume.
+        const unchangedCount = unchanged?.length || 0;
+        const unchangedSection = unchangedCount > 0 ? ` | ${unchangedCount} unchanged` : "";
+        console.log(`✅ ${result.fetchedCount} ${recordLabel} → ${created.length} synced | ${skipped.length} skipped${unchangedSection} | ${deletedCount} deleted${errorSection}\n`);
+
+        // Say why everything was written on the daily full pass, so a full-resync
+        // run isn't mistaken for change detection having quietly stopped working.
+        if (changeDetection?.fullResync) {
+          console.log(`   [full resync] daily backstop — every record written unconditionally\n`);
+        } else if (changeDetection?.mode === "shadow") {
+          // Shadow mode writes everything as before; this line is the only signal
+          // of what the fast path would have done. See SYNC_CHANGE_DETECTION.
+          //
+          // Counted against created.length, not fetchedCount: syncEntireDb sources
+          // widen the date range inside the workflow and process far more records
+          // than the windowed fetchedCount shown above. Matched records are a
+          // subset of the writes actually performed.
+          const stillWritten = Math.max(0, created.length - changeDetection.matched);
+          console.log(`   [shadow] change detection would skip ${changeDetection.matched} of ${created.length} writes — ${stillWritten} would still be written\n`);
+        }
         
         // Collect errors for final summary
         if (errorCount > 0) {
