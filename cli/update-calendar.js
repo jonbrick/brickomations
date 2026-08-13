@@ -144,6 +144,11 @@ async function handleAllCalendarSyncs(startDate, endDate, action) {
 
         // Say why everything was written on the daily full pass, so a full-resync
         // run isn't mistaken for change detection having quietly stopped working.
+        // A degraded fast path looks exactly like a slow one. Say so out loud.
+        if (changeDetection?.listFailures > 0) {
+          console.log(`   ⚠️  change detection degraded — calendar listing failed, ${changeDetection.listFailures} record(s) written unconditionally\n`);
+        }
+
         if (changeDetection?.fullResync) {
           console.log(`   [full resync] daily backstop — every record written unconditionally\n`);
         } else if (changeDetection?.mode === "shadow") {

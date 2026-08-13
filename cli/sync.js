@@ -306,4 +306,10 @@ function main() {
 process.on("SIGINT", () => { releaseLock(); process.exit(130); });
 process.on("SIGTERM", () => { releaseLock(); process.exit(143); });
 
-main();
+// Only run the pipeline when invoked directly, so test/error-detail.test.js can
+// require this file for extractErrorDetail without kicking off a sync.
+if (require.main === module) {
+  main();
+}
+
+module.exports = { extractErrorDetail };

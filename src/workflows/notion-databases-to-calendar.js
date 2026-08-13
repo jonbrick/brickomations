@@ -68,16 +68,38 @@ function getDisplayName(record, repo, integrationConfig) {
 // matches what we would write are now skipped outright: no API calls, no Notion
 // write-back, no rate-limit delay.
 //
-// Both transformers emit all-day events with a fixed, fully deterministic field
-// set (summary, description, start.date, end.date, optional colorId), so there
-// is no dateTime/timezone normalization to get wrong here. Anything unexpected —
-// a missing event, a dateTime-shaped event, a cancelled event — returns false and
-// falls through to the existing write path. This may only ever skip a write; it
-// can never redirect one.
-const COMPARED_TEXT_FIELDS = ["summary", "description", "colorId"];
+// The comparison covers the union of two field sets, because each one alone has
+// a blind spot:
+//
+//   1. Object.keys(transformedEvent) — whatever the transformer actually set.
+//      Adding a field to a transformer brings it under comparison automatically,
+//      so no one has to remember to update a list here.
+//
+//   2. MANAGED_EVENT_FIELDS — fields a transformer *may* set. Needed because (1)
+//      goes blind exactly when a transformer STOPS setting something: if a colorId
+//      stops mapping, the key vanishes from the transformed event and the stale
+//      colour would sit on the calendar unnoticed. Comparing these regardless
+//      means removals propagate too.
+//
+// Fields Google sets on its own (etag, sequence, organizer, …) are ignored —
+// Notion is the source of truth only for what it writes.
+//
+// Anything whose shape can't be compared with confidence returns false and falls
+// through to the write path. This may only ever skip a write; it can never
+// redirect one.
+const MANAGED_EVENT_FIELDS = [
+  "summary",
+  "description",
+  "location",
+  "colorId",
+  "start",
+  "end",
+  "transparency",
+  "visibility",
+];
 
 /**
- * Normalize a comparable field for equality testing.
+ * Normalize a scalar field for equality testing.
  * Google omits empty description/colorId rather than returning "", while the
  * transformers produce "" for an empty description; treat those alike. Google
  * also echoes descriptions back with CRLF line endings.
@@ -87,6 +109,41 @@ const COMPARED_TEXT_FIELDS = ["summary", "description", "colorId"];
 function normalizeComparable(value) {
   if (value === undefined || value === null) return "";
   return String(value).replace(/\r\n/g, "\n").trim();
+}
+
+/**
+ * Compare one field of the desired event against the calendar's current value.
+ * Scalars compare normalized; plain objects (start/end) recurse over the keys
+ * the transformer set; anything else (arrays, functions, dates) is treated as
+ * not-comparable and therefore not a match.
+ * @param {*} existingValue - Value from the Google event
+ * @param {*} desiredValue - Value from the transformed event
+ * @returns {boolean}
+ */
+function fieldMatches(existingValue, desiredValue) {
+  if (
+    desiredValue === null ||
+    desiredValue === undefined ||
+    typeof desiredValue === "string" ||
+    typeof desiredValue === "number" ||
+    typeof desiredValue === "boolean"
+  ) {
+    return normalizeComparable(existingValue) === normalizeComparable(desiredValue);
+  }
+
+  const isPlainObject = (v) =>
+    typeof v === "object" && v !== null && !Array.isArray(v) && !(v instanceof Date);
+
+  if (isPlainObject(desiredValue)) {
+    if (!isPlainObject(existingValue)) return false;
+    return Object.keys(desiredValue).every((key) =>
+      fieldMatches(existingValue[key], desiredValue[key])
+    );
+  }
+
+  // Arrays (recurrence, attendees, …) and any other shape: not compared, so the
+  // record takes the write path. Deliberate — a wrong skip is worse than a write.
+  return false;
 }
 
 /**
@@ -100,30 +157,39 @@ function eventMatchesExisting(existing, event) {
   if (!existing || !event) return false;
   // A cancelled event is never up to date.
   if (existing.status === "cancelled") return false;
-  // All-day shape only — a dateTime on either side is outside what we compare.
+
+  // All-day shape only. Timed events would need offset-aware comparison of
+  // dateTime strings that Google may return in a different but equivalent
+  // representation — a wrong match there means a meeting silently keeps the
+  // wrong time. No current syncEntireDb source emits them; if one ever does it
+  // takes the write path until someone implements that comparison deliberately.
   if (existing.start?.dateTime || existing.end?.dateTime) return false;
   if (event.start?.dateTime || event.end?.dateTime) return false;
   if (!existing.start?.date || !existing.end?.date) return false;
   if (!event.start?.date || !event.end?.date) return false;
-  if (existing.start.date !== event.start.date) return false;
-  if (existing.end.date !== event.end.date) return false;
-  return COMPARED_TEXT_FIELDS.every(
-    (field) =>
-      normalizeComparable(existing[field]) === normalizeComparable(event[field])
+
+  // Every field the transformer set, plus every field it could have set — so
+  // that clearing a value propagates just as an edit does.
+  const comparedKeys = new Set([...MANAGED_EVENT_FIELDS, ...Object.keys(event)]);
+  return [...comparedKeys].every((key) =>
+    fieldMatches(existing[key], event[key])
   );
 }
 
 /**
  * Resolve the change-detection mode.
- * "shadow" (default) computes the decision and reports what it would have
- * skipped, but still performs every write — so the fast path can be validated
- * against real runs before it takes effect. "on" enables skipping. "off"
- * restores the previous unconditional behavior.
+ * "on" (default) skips writes for records the calendar already matches.
+ * "shadow" computes and reports the same decision but still performs every
+ * write — a diagnostic for confirming what the fast path would do without
+ * letting it act. "off" restores the unconditional pre-2026-08 behavior.
+ *
+ * An unrecognized value falls back to "on" rather than erroring: a typo in .env
+ * should not quietly revert the pipeline to a mode nobody chose.
  * @returns {"on"|"shadow"|"off"}
  */
 function getChangeDetectionMode() {
-  const raw = (process.env.SYNC_CHANGE_DETECTION || "shadow").toLowerCase();
-  return ["on", "shadow", "off"].includes(raw) ? raw : "shadow";
+  const raw = (process.env.SYNC_CHANGE_DETECTION || "on").toLowerCase();
+  return ["on", "shadow", "off"].includes(raw) ? raw : "on";
 }
 
 // Daily full-resync backstop. The fast path above trusts a field comparison;
@@ -138,41 +204,47 @@ const FULL_RESYNC_STAMP = path.join(
   "last-full-resync"
 );
 
-// Memoized per process so every source in one `update` run shares the decision —
-// otherwise the first source would consume the stamp and the rest would take the
-// fast path on what is supposed to be the full pass.
-let fullResyncDecision = null;
+// Memoized per process, per stamp path, so every source in one `update` run
+// shares the decision — otherwise the first source would consume the stamp and
+// the rest would take the fast path on what is supposed to be the full pass.
+const fullResyncDecisions = new Map();
 
 /**
  * True when this process should write every record unconditionally.
- * Fails safe: if the stamp can't be read or written, resync.
+ * Fails safe in every direction: an absent, stale, unreadable or unwritable
+ * stamp all resolve to "resync". Only an exact match on today's local date
+ * permits the fast path.
+ * @param {string} [stampPath] - Override the stamp location (tests).
  * @returns {boolean}
  */
-function isFullResyncDue() {
-  if (fullResyncDecision !== null) return fullResyncDecision;
+function isFullResyncDue(stampPath = FULL_RESYNC_STAMP) {
+  if (fullResyncDecisions.has(stampPath)) {
+    return fullResyncDecisions.get(stampPath);
+  }
 
   const today = formatDateOnly(getToday());
   let last = null;
   try {
-    last = fs.readFileSync(FULL_RESYNC_STAMP, "utf8").trim();
+    last = fs.readFileSync(stampPath, "utf8").trim();
   } catch {
     // No stamp yet — this run becomes the day's full resync.
   }
 
-  fullResyncDecision = last !== today;
+  let due = last !== today;
 
-  if (fullResyncDecision) {
+  if (due) {
     try {
-      fs.mkdirSync(path.dirname(FULL_RESYNC_STAMP), { recursive: true });
-      fs.writeFileSync(FULL_RESYNC_STAMP, today);
+      fs.mkdirSync(path.dirname(stampPath), { recursive: true });
+      fs.writeFileSync(stampPath, today);
     } catch {
       // Can't persist the stamp — keep resyncing every run rather than
       // silently trusting the fast path forever.
-      fullResyncDecision = true;
+      due = true;
     }
   }
 
-  return fullResyncDecision;
+  fullResyncDecisions.set(stampPath, due);
+  return due;
 }
 
 /**
@@ -388,6 +460,12 @@ async function syncToCalendar(integrationId, startDate, endDate, options = {}) {
   const useChangeDetection =
     changeDetectionMode !== "off" && isFullDbSource && !fullResyncDue;
   let unchangedMatches = 0;
+  // Counted, not swallowed. If listing the calendar starts failing, every record
+  // falls through to the write path — correct, but it silently returns the step
+  // to its old ~340s cost and the fast path looks like it just stopped finding
+  // matches. Surfacing this is the difference between a visible degradation and
+  // a mysterious slowdown months later.
+  let listFailures = 0;
 
   // One listEvents call per calendar, reused for every record. The cleanup phase
   // already lists this same range, so this reuses an established access pattern
@@ -478,8 +556,15 @@ async function syncToCalendar(integrationId, startDate, endDate, options = {}) {
           try {
             const byId = await getExistingEventsById(calService, calendarId);
             known = byId.get(existingEventId) || null;
-          } catch {
-            // Listing failed — fall through to the unconditional write path.
+          } catch (error) {
+            // Listing failed — fall through to the unconditional write path,
+            // but record it so the degradation is visible rather than silent.
+            listFailures++;
+            if (listFailures === 1) {
+              results.errors.push({
+                error: `Change detection unavailable, falling back to unconditional writes: ${error.message}`,
+              });
+            }
             known = null;
           }
           if (eventMatchesExisting(known, event)) {
@@ -628,6 +713,7 @@ async function syncToCalendar(integrationId, startDate, endDate, options = {}) {
       mode: changeDetectionMode,
       matched: unchangedMatches,
       fullResync: fullResyncDue,
+      listFailures,
     };
   }
 
@@ -636,4 +722,10 @@ async function syncToCalendar(integrationId, startDate, endDate, options = {}) {
 
 module.exports = {
   syncToCalendar,
+  // Exported for test/change-detection.test.js. These decide whether a calendar
+  // write is skipped, so they are the part of this file most worth pinning down.
+  eventMatchesExisting,
+  fieldMatches,
+  getChangeDetectionMode,
+  isFullResyncDue,
 };
