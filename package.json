@@ -1,5 +1,5 @@
 {
-  "name": "brickbot",
+  "name": "brickomations",
   "version": "2.0.0",
   "description": "Personal data collection and summaries using Notion and Google Calendar",
   "main": "src/index.js",

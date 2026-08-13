@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.brickbot.app-launcher</string>
+    <string>com.brickomations.app-launcher</string>
 
     <key>ProgramArguments</key>
     <array>
-        <string>__HOME__/projects/brickbot/scripts/ensure-apps-running.sh</string>
+        <string>__HOME__/projects/brickomations/scripts/ensure-apps-running.sh</string>
     </array>
 
     <!-- Fires before each Cowork event so Claude Desktop is up. `open -a` is -->
@@ -31,12 +31,12 @@
     </array>
 
     <key>StandardOutPath</key>
-    <string>__HOME__/projects/brickbot/local/logs/app-launcher-stdout.log</string>
+    <string>__HOME__/projects/brickomations/local/logs/app-launcher-stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>__HOME__/projects/brickbot/local/logs/app-launcher-stderr.log</string>
+    <string>__HOME__/projects/brickomations/local/logs/app-launcher-stderr.log</string>
 
     <key>WorkingDirectory</key>
-    <string>__HOME__/projects/brickbot</string>
+    <string>__HOME__/projects/brickomations</string>
 </dict>
 </plist>

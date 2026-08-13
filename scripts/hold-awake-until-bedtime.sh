@@ -15,7 +15,7 @@ set -euo pipefail
 START_HHMM="05:45"
 END_HHMM="23:30"
 
-LOG_FILE="$HOME/projects/brickbot/local/logs/caffeinate.log"
+LOG_FILE="$HOME/projects/brickomations/local/logs/caffeinate.log"
 mkdir -p "$(dirname "$LOG_FILE")"
 ts() { date "+%Y-%m-%dT%H:%M:%S%z"; }
 log() { echo "$(ts) $*" >> "$LOG_FILE"; }

@@ -1,7 +1,7 @@
 /**
  * Synchronous fs read/write with retry on transient errors.
  *
- * The data plane (~/Documents/brickbot-data/) and the Brickocampus vault
+ * The data plane (~/Documents/brickomations-data/) and the Brickocampus vault
  * (Obsidian iCloud container) are both iCloud-synced. When a scheduled sync
  * opens a file at the exact moment iCloud is re-syncing it, the read/write can
  * fail with a transient "Unknown system error -11" (EDEADLK) / EAGAIN / EBUSY.

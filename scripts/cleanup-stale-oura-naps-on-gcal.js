@@ -22,7 +22,7 @@
  *     creating a duplicate.
  *
  * Run on the mini (PERSONAL_GOOGLE_REFRESH_TOKEN must be set):
- *   cd ~/projects/brickbot && node scripts/cleanup-stale-oura-naps-on-gcal.js
+ *   cd ~/projects/brickomations && node scripts/cleanup-stale-oura-naps-on-gcal.js
  *
  * Add --dry-run to see what would happen without writing.
  */

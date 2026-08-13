@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.brickbot.daily-text-morning</string>
+    <string>com.brickomations.daily-text-morning</string>
 
     <!-- Texts a plain-text digest of today's daily note (morning sections) with  -->
     <!-- a tappable obsidian:// link back into the note. Fires 20 min after the    -->
@@ -15,7 +15,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/opt/homebrew/bin/node</string>
-        <string>__HOME__/projects/brickbot/scripts/send-daily-text.js</string>
+        <string>__HOME__/projects/brickomations/scripts/send-daily-text.js</string>
         <string>--slot</string>
         <string>morning</string>
     </array>
@@ -27,12 +27,12 @@
     </dict>
 
     <key>StandardOutPath</key>
-    <string>__HOME__/projects/brickbot/local/logs/launchd-stdout.log</string>
+    <string>__HOME__/projects/brickomations/local/logs/launchd-stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>__HOME__/projects/brickbot/local/logs/launchd-stderr.log</string>
+    <string>__HOME__/projects/brickomations/local/logs/launchd-stderr.log</string>
 
     <key>WorkingDirectory</key>
-    <string>__HOME__/projects/brickbot</string>
+    <string>__HOME__/projects/brickomations</string>
 </dict>
 </plist>

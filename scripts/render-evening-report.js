@@ -45,7 +45,7 @@ const path = require("path");
 const os = require("os");
 
 const VAULT_DIR = path.join(os.homedir(), "projects", "brickocampus");
-const DATA_DIR = path.join(os.homedir(), "projects", "brickbot", "data");
+const DATA_DIR = path.join(os.homedir(), "projects", "brickomations", "data");
 
 // Event statuses that mean "did not occur" — dropped from Completed Events.
 const EVENT_DROP_STATUSES = new Set(["Won't Do", "N/A"]);
