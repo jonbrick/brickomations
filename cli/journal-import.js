@@ -2,9 +2,9 @@
 /**
  * Journal Import CLI
  * Imports 5 Minute Journal exports into data/journal.json (which lives in
- * ~/Documents/brickbot-data/ via the data/ symlink, outside the Obsidian vault).
+ * ~/Documents/brickomations-data/ via the data/ symlink, outside the Obsidian vault).
  *
- * Inbox model (in iCloud Drive at ~/Documents/brickbot-data/, synced across machines):
+ * Inbox model (in iCloud Drive at ~/Documents/brickomations-data/, synced across machines):
  *   - Drop an unzipped 5MJ export into _journal-inbox/  (a dir containing index.json)
  *   - Run: yarn journal:import
  *   - The script reads the text into data/journal.json, copies the tiny index.json
@@ -12,7 +12,7 @@
  *     bulky export out of the inbox to the Trash.
  *   - An empty inbox is a no-op: data/journal.json already holds every entry.
  *
- * _journal-inbox/ and journal-archive/ are symlinks to ~/Documents/brickbot-data/
+ * _journal-inbox/ and journal-archive/ are symlinks to ~/Documents/brickomations-data/
  * (iCloud Drive, outside the vault), the same mechanism data/ uses — so
  * brickbot stays scripts-only and the journal data (Jon's manual exports) lives
  * beside the data cache.

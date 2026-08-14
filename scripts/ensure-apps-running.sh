@@ -11,7 +11,7 @@
 # unprovable from logs — was Claude Desktop ever attempted? Now we'll know.
 set -euo pipefail
 
-LOG_FILE="$HOME/projects/brickbot/local/logs/app-launcher.log"
+LOG_FILE="$HOME/projects/brickomations/local/logs/app-launcher.log"
 mkdir -p "$(dirname "$LOG_FILE")"
 
 ts() { date "+%Y-%m-%dT%H:%M:%S%z"; }

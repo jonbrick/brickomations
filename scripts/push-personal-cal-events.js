@@ -22,7 +22,7 @@
  * (±60 sec window) already exists.
  *
  * Run on the mini (PERSONAL_GOOGLE_REFRESH_TOKEN must be set):
- *   cd ~/projects/brickbot && node scripts/push-personal-cal-events.js [path] [--dry-run]
+ *   cd ~/projects/brickomations && node scripts/push-personal-cal-events.js [path] [--dry-run]
  *
  * Defaults to local/calendar/personal-events.json when no path is given.
  */

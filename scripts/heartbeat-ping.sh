@@ -4,7 +4,7 @@
 # prompts at the end of each Cowork task.
 #
 # Usage: heartbeat-ping.sh <job-name> <ok|failed> [message]
-# Writes: ~/projects/brickbot/local/heartbeat/<job-name>.json
+# Writes: ~/projects/brickomations/local/heartbeat/<job-name>.json
 set -euo pipefail
 
 if [ "$#" -lt 2 ]; then
@@ -27,7 +27,7 @@ if [[ ! "$job" =~ ^[a-z0-9-]+$ ]]; then
   exit 64
 fi
 
-heartbeat_dir="$HOME/projects/brickbot/local/heartbeat"
+heartbeat_dir="$HOME/projects/brickomations/local/heartbeat"
 mkdir -p "$heartbeat_dir"
 
 target="$heartbeat_dir/${job}.json"

@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.brickbot.watchdog</string>
+    <string>com.brickomations.watchdog</string>
 
     <key>ProgramArguments</key>
     <array>
-        <string>__HOME__/projects/brickbot/scripts/heartbeat-watchdog.sh</string>
+        <string>__HOME__/projects/brickomations/scripts/heartbeat-watchdog.sh</string>
     </array>
 
     <!-- Every 5 minutes. Reads heartbeat ping files, alerts via iMessage on -->
@@ -16,12 +16,12 @@
     <integer>300</integer>
 
     <key>StandardOutPath</key>
-    <string>__HOME__/projects/brickbot/local/logs/watchdog-stdout.log</string>
+    <string>__HOME__/projects/brickomations/local/logs/watchdog-stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>__HOME__/projects/brickbot/local/logs/watchdog-stderr.log</string>
+    <string>__HOME__/projects/brickomations/local/logs/watchdog-stderr.log</string>
 
     <key>WorkingDirectory</key>
-    <string>__HOME__/projects/brickbot</string>
+    <string>__HOME__/projects/brickomations</string>
 </dict>
 </plist>

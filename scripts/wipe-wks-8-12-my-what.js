@@ -68,7 +68,7 @@ console.log(`Total field clears: ${totalClears}`);
 if (apply) {
   fs.writeFileSync(DATA_PATH, JSON.stringify(retro, null, 2));
   console.log("");
-  console.log("✓ Wrote retro.json. Next: cd ~/projects/brickbot && yarn push");
+  console.log("✓ Wrote retro.json. Next: cd ~/projects/brickomations && yarn push");
 } else {
   console.log("");
   console.log("Dry-run only. Re-run with --apply.");

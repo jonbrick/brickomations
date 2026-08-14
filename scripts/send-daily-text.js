@@ -32,7 +32,7 @@ const { execFileSync } = require("child_process");
 
 const VAULT_DIR = path.join(os.homedir(), "projects", "brickocampus");
 const VAULT_NAME = "brickocampus";
-const BRICKBOT_DIR = path.join(os.homedir(), "projects", "brickbot");
+const BRICKBOT_DIR = path.join(os.homedir(), "projects", "brickomations");
 
 // Each slot lifts exactly one `## ` zone from the daily note, verbatim.
 const ZONE_FOR_SLOT = {

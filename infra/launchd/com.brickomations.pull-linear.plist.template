@@ -3,15 +3,15 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.brickbot.pull-linear</string>
+    <string>com.brickomations.pull-linear</string>
 
     <!-- Wraps `node cli/pull-linear.js` in caffeinate so the system holds awake -->
     <!-- for exactly the script's lifetime. Wakelock releases on script exit.    -->
     <key>ProgramArguments</key>
     <array>
-        <string>__HOME__/projects/brickbot/scripts/run-with-wakelock.sh</string>
+        <string>__HOME__/projects/brickomations/scripts/run-with-wakelock.sh</string>
         <string>/opt/homebrew/bin/node</string>
-        <string>__HOME__/projects/brickbot/cli/pull-linear.js</string>
+        <string>__HOME__/projects/brickomations/cli/pull-linear.js</string>
     </array>
 
     <!-- Single fire at 6:30 AM — deliberately separate from `yarn sync` so a  -->
@@ -25,12 +25,12 @@
     </dict>
 
     <key>StandardOutPath</key>
-    <string>__HOME__/projects/brickbot/local/logs/launchd-stdout.log</string>
+    <string>__HOME__/projects/brickomations/local/logs/launchd-stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>__HOME__/projects/brickbot/local/logs/launchd-stderr.log</string>
+    <string>__HOME__/projects/brickomations/local/logs/launchd-stderr.log</string>
 
     <key>WorkingDirectory</key>
-    <string>__HOME__/projects/brickbot</string>
+    <string>__HOME__/projects/brickomations</string>
 </dict>
 </plist>

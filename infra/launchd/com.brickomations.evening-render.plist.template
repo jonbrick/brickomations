@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.brickbot.evening-render</string>
+    <string>com.brickomations.evening-render</string>
 
     <!-- Fills the daily note's ### Completed Tasks / ### Completed Events from the -->
     <!-- freshly-synced Notion snapshot (data/life.json, data/plan.json). Fires at   -->
@@ -16,7 +16,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/opt/homebrew/bin/node</string>
-        <string>__HOME__/projects/brickbot/scripts/render-evening-report.js</string>
+        <string>__HOME__/projects/brickomations/scripts/render-evening-report.js</string>
     </array>
 
     <key>StartCalendarInterval</key>
@@ -26,12 +26,12 @@
     </dict>
 
     <key>StandardOutPath</key>
-    <string>__HOME__/projects/brickbot/local/logs/launchd-stdout.log</string>
+    <string>__HOME__/projects/brickomations/local/logs/launchd-stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>__HOME__/projects/brickbot/local/logs/launchd-stderr.log</string>
+    <string>__HOME__/projects/brickomations/local/logs/launchd-stderr.log</string>
 
     <key>WorkingDirectory</key>
-    <string>__HOME__/projects/brickbot</string>
+    <string>__HOME__/projects/brickomations</string>
 </dict>
 </plist>

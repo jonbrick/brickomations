@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.brickbot.caffeinate</string>
+    <string>com.brickomations.caffeinate</string>
 
     <!-- Holds idle sleep off from 05:45 to 23:30 daily so the mini stays    -->
     <!-- discoverable for AirDrop / SSH / general "just need to talk to it"  -->
@@ -19,7 +19,7 @@
     <!-- thing that gets this job firing at 05:45.                            -->
     <key>ProgramArguments</key>
     <array>
-        <string>__HOME__/projects/brickbot/scripts/hold-awake-until-bedtime.sh</string>
+        <string>__HOME__/projects/brickomations/scripts/hold-awake-until-bedtime.sh</string>
     </array>
 
     <key>StartCalendarInterval</key>
@@ -34,12 +34,12 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>__HOME__/projects/brickbot/local/logs/caffeinate-stdout.log</string>
+    <string>__HOME__/projects/brickomations/local/logs/caffeinate-stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>__HOME__/projects/brickbot/local/logs/caffeinate-stderr.log</string>
+    <string>__HOME__/projects/brickomations/local/logs/caffeinate-stderr.log</string>
 
     <key>WorkingDirectory</key>
-    <string>__HOME__/projects/brickbot</string>
+    <string>__HOME__/projects/brickomations</string>
 </dict>
 </plist>
