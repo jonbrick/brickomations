@@ -23,7 +23,7 @@ const KEYWORDS = {
     "bug:", "bug/", "refactor:", "refactor/", "chore:", "chore/",
     "spike:", "spike/", "test:", "test/", "ci:", "ci/",
     "infra:", "infra/", "merge", "docs:", "docs/",
-    "skill:", "skill/", "brickbot:", "brickbot/",
+    "skill:", "skill/", "brickbot:", "brickbot/", "brickomations:", "brickomations/",
   ],
   admin: [
     "journals", "journal", "update", "retro", "plan", "recap",

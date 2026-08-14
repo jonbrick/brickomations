@@ -170,7 +170,7 @@ async function processDate(targetDate, dryRun) {
 
     // Write one record per period
     // record_id uses UTC date (targetDate) — just a unique key
-    // date field uses Eastern date per-period — what brickbot queries on
+    // date field uses Eastern date per-period — what brickomations queries on
     for (let i = 0; i < playPeriods.length; i++) {
       const period = playPeriods[i];
       const easternDate = getEasternDate(period.start);

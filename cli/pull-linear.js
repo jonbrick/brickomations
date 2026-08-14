@@ -19,7 +19,7 @@
  *
  * Deliberately separate from `yarn pull` / `yarn sync`: a Linear failure
  * must not stale the Notion/Calendar caches. Own launchd job
- * (com.brickbot.pull-linear), own heartbeat ping.
+ * (com.brickomations.pull-linear), own heartbeat ping.
  *
  * Fail loud, never partial: both files are written only after every fetch
  * has succeeded; any error leaves the existing caches untouched, pings

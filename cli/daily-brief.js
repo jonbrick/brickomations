@@ -10,7 +10,7 @@
  * indefinitely — historical record for retros and debugging).
  *
  * Designed to run at 6:00 AM via dedicated launchd plist
- * (com.brickbot.daily-brief), separate from `yarn sync`. No API calls —
+ * (com.brickomations.daily-brief), separate from `yarn sync`. No API calls —
  * reads existing data/*.json (refreshed by the 11 PM yarn sync the night
  * before). ~5 second runtime, plenty of headroom before the 7 AM Cowork
  * morning-brief task that consumes the brief.
@@ -30,7 +30,7 @@ const REPO_ROOT = path.join(__dirname, "..");
 const DATA_DIR = path.join(REPO_ROOT, "data");
 const BRIEFS_DIR = path.join(DATA_DIR, "briefs");
 const HEARTBEAT_SCRIPT = path.join(REPO_ROOT, "scripts", "heartbeat-ping.sh");
-const JOB_NAME = "brickbot-daily-brief";
+const JOB_NAME = "brickomations-daily-brief";
 
 // --- Date handling ---
 

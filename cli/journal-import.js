@@ -14,7 +14,7 @@
  *
  * _journal-inbox/ and journal-archive/ are symlinks to ~/Documents/brickomations-data/
  * (iCloud Drive, outside the vault), the same mechanism data/ uses — so
- * brickbot stays scripts-only and the journal data (Jon's manual exports) lives
+ * brickomations stays scripts-only and the journal data (Jon's manual exports) lives
  * beside the data cache.
  *
  * Usage: yarn journal:import [path-to-export-dir-or-json]

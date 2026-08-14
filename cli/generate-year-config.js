@@ -3,7 +3,7 @@
  * Contains configuration for all databases to be created
  *
  * Source database IDs live in gitignored local/year-source-ids.json,
- * keyed by envVar — brickbot is a public repo; workspace IDs stay out
+ * keyed by envVar — brickomations is a public repo; workspace IDs stay out
  * of committed code.
  */
 

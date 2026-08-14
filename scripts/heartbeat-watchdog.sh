@@ -11,7 +11,7 @@
 # (next missed cycle, or new failure timestamp).
 #
 # Schedule (keep in sync with _automation/_automation-readme.md Schedule table):
-#   brickbot-daily-brief        — 5:50 AM
+#   brickomations-daily-brief        — 5:50 AM
 #   pull-linear                 — 6:30 AM
 #   yarn-sync                   — every 2 hr, 7 AM–11 PM (7, 9, 11 AM, 1, 3, 5, 7, 9, 11 PM)
 #   cowork-morning-brief        — 6 AM
@@ -24,7 +24,7 @@ TODAY=$(date +%Y-%m-%d)
 NOW_EPOCH=$(date +%s)
 
 # Pull just ALERT_IMESSAGE_TARGET from .env (gitignored). Avoid sourcing the
-# whole file — brickbot's .env contains lines that don't parse as bash.
+# whole file — brickomations's .env contains lines that don't parse as bash.
 if [ -f "$REPO_ROOT/.env" ]; then
   ALERT_IMESSAGE_TARGET=$(grep -E "^ALERT_IMESSAGE_TARGET=" "$REPO_ROOT/.env" \
     | head -1 | cut -d= -f2-)
@@ -51,7 +51,7 @@ send_imessage() {
   local msg="$1"
   local escaped="${msg//\"/\\\"}"
   local script
-  script=$(mktemp -t brickbot-watchdog)
+  script=$(mktemp -t brickomations-watchdog)
   cat > "$script" <<APPLESCRIPT
 tell application "Messages"
     set theService to 1st service whose service type = iMessage
@@ -76,7 +76,7 @@ alert() {
     return
   fi
 
-  send_imessage "[brickbot $(date +%Y-%m-%d)] ${job}: ${detail}"
+  send_imessage "[brickomations $(date +%Y-%m-%d)] ${job}: ${detail}"
   echo "$key" > "$marker"
 }
 
@@ -167,7 +167,7 @@ check_job() {
   fi
 }
 
-check_job "brickbot-daily-brief" "05:50" 600
+check_job "brickomations-daily-brief" "05:50" 600
 
 check_job "pull-linear" "06:30" 900
 

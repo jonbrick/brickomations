@@ -15,7 +15,7 @@ const recaps = isPersonal
   : summaries.workMonthlyRecap || [];
 
 // Mirrors MONTHLY_RECAP_BLOCK_PROPERTIES + MONTHLY_RECAP_TASK_PROPERTIES in
-// src/config/unified-sources.js. Used to detect whether brickbot's `recap`
+// src/config/unified-sources.js. Used to detect whether brickomations's `recap`
 // stage has populated the month (sum-of-bytes check, not single-field sample —
 // any one field can legitimately be empty if the month had no events in that
 // category).
@@ -57,7 +57,7 @@ for (const r of recaps) {
   const aiQ2 = (r["AI What did not go so well?"] || "").trim();
   const aiQ3 = (r["AI What did I learn?"] || "").trim();
   const status = (r["Status"] || "Not started").trim();
-  // brickbot's aggregate stage joins weekly retro values with commas; when all
+  // brickomations's aggregate stage joins weekly retro values with commas; when all
   // weeks are empty, the snapshot field becomes ",,,," — non-empty but
   // semantically empty. Require at least one alphanumeric character so the
   // comma-soup case correctly counts as 0/3.
@@ -82,7 +82,7 @@ for (const r of needsWork) {
   const my = r.myRecap ? "✓" : "◯";
   const agg = r.aggBytes > 100 ? "ready" : `THIN (${r.aggBytes}b)`;
   console.log(
-    `  ${r.title} — ${r.status} — AI:${ai} My:${my} Qs(AI):${r.aiQs}/3 Qs(My):${r.myQs}/3 | brickbot agg: ${agg}`
+    `  ${r.title} — ${r.status} — AI:${ai} My:${my} Qs(AI):${r.aiQs}/3 Qs(My):${r.myQs}/3 | brickomations agg: ${agg}`
   );
 }
 if (needsWork.length === 0) console.log("  All monthly recaps complete!");

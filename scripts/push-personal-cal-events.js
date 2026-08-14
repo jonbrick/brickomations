@@ -3,7 +3,7 @@
  * Push personal Google Calendar events from a JSON file.
  *
  * Bridges the gap that Claude's GCal MCP can't write to personal calendars
- * (it auths as jon.brick@cortex.io). Brickbot carries PERSONAL_GOOGLE_REFRESH_TOKEN
+ * (it auths as jon.brick@cortex.io). Brickomations carries PERSONAL_GOOGLE_REFRESH_TOKEN
  * and reaches the personal side via GoogleCalendarService("personal").
  *
  * JSON shape (array of events):

@@ -32,7 +32,7 @@
  *   - folding SHORT meeting gists into the Work list (### Work Meetings stays its
  *     own detailed section until the processor emits short gists)
  *
- * Scheduling (com.brickbot.evening-render): fires 21:15, AFTER the 9 PM yarn sync
+ * Scheduling (com.brickomations.evening-render): fires 21:15, AFTER the 9 PM yarn sync
  * refreshes the JSON and the evening-processor writes meeting recaps, BEFORE the
  * 9:20 PM evening text reads the note.
  *

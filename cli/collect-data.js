@@ -240,7 +240,7 @@ async function handleSourceData(sourceId, startDate, endDate, action) {
 }
 
 async function main() {
-  console.log("\n🤖 Brickbot - Data Collection Tool\n");
+  console.log("\n🤖 Brickomations - Data Collection Tool\n");
 
   let spinner;
   try {

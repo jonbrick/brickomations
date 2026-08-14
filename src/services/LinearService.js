@@ -2,7 +2,7 @@
  * Linear Service
  * Service for interacting with the Linear GraphQL API
  *
- * Read-only: queries projects and issues. Nothing in brickbot writes to
+ * Read-only: queries projects and issues. Nothing in brickomations writes to
  * Linear (Linear writes stay manual / skill-gated on the vault side).
  *
  * @layer 1 - Integration (API-Specific)

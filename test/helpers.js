@@ -1,4 +1,4 @@
-// Minimal assertion helpers. Deliberately dependency-free — brickbot has no test
+// Minimal assertion helpers. Deliberately dependency-free — brickomations has no test
 // framework and adding one for a handful of pure functions isn't worth the
 // install. Each test file exports an array of [name, fn] and throws to fail.
 

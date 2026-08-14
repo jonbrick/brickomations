@@ -1,4 +1,4 @@
-# Brickbot Internals
+# Brickomations Internals
 
 **Design patterns, code quality principles, and performance considerations**
 

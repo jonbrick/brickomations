@@ -304,7 +304,7 @@ async function handleCalendarSync(sourceId, startDate, endDate, action) {
 }
 
 async function main() {
-  console.log("\n🤖 Brickbot - Sync to Calendar\n");
+  console.log("\n🤖 Brickomations - Sync to Calendar\n");
 
   let spinner;
   try {

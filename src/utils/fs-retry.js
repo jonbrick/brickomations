@@ -23,7 +23,7 @@ function isTransient(err) {
   );
 }
 
-// Synchronous sleep — brickbot's fs calls are sync; avoids restructuring callers.
+// Synchronous sleep — brickomations's fs calls are sync; avoids restructuring callers.
 function sleepSync(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }

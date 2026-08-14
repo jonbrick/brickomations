@@ -10,7 +10,7 @@ const TokenService = require("../../src/services/TokenService");
 const tokenConfig = require("../../src/config/tokens");
 
 async function main() {
-  console.log("\n🔑 Brickbot - Token Status Checker\n");
+  console.log("\n🔑 Brickomations - Token Status Checker\n");
 
   try {
     const tokenService = new TokenService();

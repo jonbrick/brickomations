@@ -1,6 +1,6 @@
 # Steam Tracker Documentation
 
-How gaming data gets from Steam → AWS → brickbot → Notion → Google Calendar.
+How gaming data gets from Steam → AWS → brickomations → Notion → Google Calendar.
 
 ## Architecture Overview
 
@@ -25,7 +25,7 @@ Steam API (cumulative playtime only — no session history)
     │
     ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Brickbot                                                │
+│  Brickomations                                                │
 │                                                          │
 │  yarn collect  →  SteamService  →  collect-steam.js      │
 │                       └─► Notion (Steam Data DB)         │
@@ -40,7 +40,7 @@ Steam's API only provides **cumulative lifetime playtime per game**. There's no 
 
 1. **Checker** — Polls every 30 min to detect when playtime increases (the delta = a play session)
 2. **Summarizer** — Aggregates raw deltas into daily periods with snapped 30-min block boundaries
-3. **API Handler** — Serves the period records to brickbot via HTTP
+3. **API Handler** — Serves the period records to brickomations via HTTP
 
 ## Lambda Functions
 
@@ -153,7 +153,7 @@ Period start = first block's start. Period end = last block's end. Duration = bl
 
 The Summarizer stores both UTC and Eastern for every timestamp:
 
-- `date`: Eastern date derived per-period from the period's start time (what brickbot queries on)
+- `date`: Eastern date derived per-period from the period's start time (what brickomations queries on)
 - `date_utc`: The UTC date the Summarizer was invoked with (the Checker's `date_utc`)
 - `start_time` / `end_time`: Eastern ISO with offset (e.g., `2026-01-21T21:30:00-05:00`)
 - `start_time_utc` / `end_time_utc`: Raw UTC ISO (e.g., `2026-01-22T02:30:00.000Z`)
@@ -187,7 +187,7 @@ Note: `record_id` uses the **UTC date** (the Summarizer's input date). The `date
 
 **Trigger:** Lambda Function URL (HTTP GET)
 
-**Endpoint:** Set via `STEAM_URL` in brickbot's `.env`
+**Endpoint:** Set via `STEAM_URL` in brickomations's `.env`
 
 **Query parameters:**
 
@@ -238,9 +238,9 @@ Note: `record_id` uses the **UTC date** (the Summarizer's input date). The `date
 | Raw session    | `{ISO_timestamp}_{gameId}`            | Eastern date         | UTC date         | Individual 30-min check deltas     |
 | Period summary | `DAILY_{utcDate}_{gameId}_PERIOD_{n}` | Eastern (per-period) | UTC date         | One record per play period         |
 
-**Key convention:** Both Checker and Summarizer records use `date` for Eastern and `date_utc` for UTC. The `date` field is what brickbot and the API Handler query on. The `date_utc` field is what the Summarizer uses to find Checker records.
+**Key convention:** Both Checker and Summarizer records use `date` for Eastern and `date_utc` for UTC. The `date` field is what brickomations and the API Handler query on. The `date_utc` field is what the Summarizer uses to find Checker records.
 
-## Brickbot Integration
+## Brickomations Integration
 
 ### `yarn collect` (collect-steam.js)
 

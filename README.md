@@ -1,8 +1,8 @@
-# Brickbot
+# Brickomations
 
 **Personal Data Management System**
 
-Brickbot automatically collects data from external sources (GitHub, Oura, Strava, Steam, Withings), syncs it to Notion, creates calendar events, and generates AI-powered insights about your productivity, health, and habits.
+Brickomations automatically collects data from external sources (GitHub, Oura, Strava, Steam, Withings), syncs it to Notion, creates calendar events, and generates AI-powered insights about your productivity, health, and habits.
 
 ## Documentation
 
@@ -34,7 +34,7 @@ Brickbot automatically collects data from external sources (GitHub, Oura, Strava
 - Use **REFERENCE.md** for quick lookups (naming conventions, API mappings, env vars)
 - Read **INTERNALS.md** for deep understanding of design patterns and best practices
 
-> **New to Brickbot?** Start with [QUICKSTART.md](QUICKSTART.md) for a high-level overview, then return here for installation instructions.
+> **New to Brickomations?** Start with [QUICKSTART.md](QUICKSTART.md) for a high-level overview, then return here for installation instructions.
 
 ## Installation
 
@@ -61,7 +61,7 @@ Brickbot automatically collects data from external sources (GitHub, Oura, Strava
 
 ```bash
 # Clone the repository
-cd brickbot
+cd brickomations
 
 # Install dependencies
 npm install
@@ -96,7 +96,7 @@ yarn tokens
 
 1. Go to [Notion Integrations](https://www.notion.so/my-integrations)
 2. Click "New integration"
-3. Name it "Brickbot" (or any name you prefer)
+3. Name it "Brickomations" (or any name you prefer)
 4. Select your workspace
 5. Copy the "Internal Integration Token"
 6. Add to `.env`:
@@ -215,7 +215,7 @@ For each database:
 1. Open the database in Notion
 2. Click "..." (three dots) in top right
 3. Click "Add connections"
-4. Select your Brickbot integration
+4. Select your Brickomations integration
 5. Click "Confirm"
 
 #### 4. Get Database IDs
@@ -242,7 +242,7 @@ For each database:
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project or select existing
-3. Name it "Brickbot" or similar
+3. Name it "Brickomations" or similar
 
 #### 2. Enable Google Calendar API
 
@@ -255,7 +255,7 @@ For each database:
 1. Go to "APIs & Services" > "Credentials"
 2. Click "Create Credentials" > "OAuth client ID"
 3. Select "Desktop app" as application type
-4. Name it "Brickbot"
+4. Name it "Brickomations"
 5. Click "Create"
 6. Download the JSON file
 7. Extract `client_id` and `client_secret`
@@ -623,7 +623,7 @@ yarn tokens:refresh # Refresh expired tokens
 
 ### Automation (launchd)
 
-Brickbot runs automatically 9x daily — every 2 hours, 7 AM–11 PM (7, 9, 11 AM, 1, 3, 5, 7, 9, 11 PM) via launchd. The full automation surface (Cowork morning-brief, evening-processor, watchdog, app-launcher, pmset wakes) lives in `~/projects/brickocampus/_automation/_automation-readme.md`. This section covers `com.brickbot.daily` only:
+Brickomations runs automatically 9x daily — every 2 hours, 7 AM–11 PM (7, 9, 11 AM, 1, 3, 5, 7, 9, 11 PM) via launchd. The full automation surface (Cowork morning-brief, evening-processor, watchdog, app-launcher, pmset wakes) lives in `~/projects/brickocampus/_automation/_automation-readme.md`. This section covers `com.brickomations.daily` only:
 
 ```
 tokens:refresh → collect → update → summarize → aggregate → pull → vault-sync
@@ -641,10 +641,10 @@ tokens:refresh → collect → update → summarize → aggregate → pull → v
 ./scripts/install-launchd.sh
 
 # Verify it's loaded
-launchctl list | grep brickbot
+launchctl list | grep brickomations
 
 # Unload if needed
-launchctl unload ~/Library/LaunchAgents/com.brickbot.daily.plist
+launchctl unload ~/Library/LaunchAgents/com.brickomations.daily.plist
 ```
 
 If Mac is asleep at scheduled time, launchd runs the missed job when it wakes up.
