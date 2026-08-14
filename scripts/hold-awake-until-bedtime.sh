@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # hold-awake-until-bedtime.sh — hold idle sleep off until 23:30 today.
 #
-# Called daily at 05:45 by com.brickbot.caffeinate. RunAtLoad also fires this
+# Called daily at 05:45 by com.brickomations.caffeinate. RunAtLoad also fires this
 # at launchd load (boot, manual reload) so a mid-day reboot resumes the awake
 # window without waiting for the next 05:45 fire. Exits cleanly if invoked
 # outside the 05:45–23:30 window — re-firing is always safe.

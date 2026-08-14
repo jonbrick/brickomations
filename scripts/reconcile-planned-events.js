@@ -113,7 +113,7 @@ function classify(summary) {
   if (/personal training|randy|workout|lift|run\b|stairmaster|skierg|row\b|padel|gym|boxing/.test(body))
     return { habitType: "workout", auto: true, targetKey: null };
   if (/video\s*game|gaming|steam/.test(body)) return { habitType: "videogames", auto: true, targetKey: null };
-  if (/cod(e|ing)|brickbot|brickomations|github/.test(body)) return { habitType: "coding", auto: true, targetKey: null };
+  if (/cod(e|ing)|brickomations|brickomations|github/.test(body)) return { habitType: "coding", auto: true, targetKey: null };
   if (/read/.test(body)) return { habitType: "reading", auto: false, targetKey: "reading" };
   if (/music|guitar/.test(body)) return { habitType: "music", auto: false, targetKey: "music" };
   if (/meditat/.test(body)) return { habitType: "meditation", auto: false, targetKey: "meditation" };

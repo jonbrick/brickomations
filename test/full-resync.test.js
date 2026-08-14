@@ -14,7 +14,7 @@ const { isFullResyncDue } = require("../src/workflows/notion-databases-to-calend
 // real local/last-full-resync untouched.
 let counter = 0;
 function tempStamp(contents) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "brickbot-resync-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "brickomations-resync-"));
   const stamp = path.join(dir, `stamp-${counter++}`);
   if (contents !== undefined) fs.writeFileSync(stamp, contents);
   return stamp;

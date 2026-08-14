@@ -1,4 +1,4 @@
-# Brickbot Reference
+# Brickomations Reference
 
 **Technical reference for naming conventions, API mappings, and configuration**
 

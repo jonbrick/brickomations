@@ -1077,7 +1077,7 @@ function generateHtmlViews() {
 // --- Main ---
 
 async function main() {
-  console.log("\n🤖 Brickbot - Pull Data\n");
+  console.log("\n🤖 Brickomations - Pull Data\n");
 
   let sections, startDate, endDate;
 

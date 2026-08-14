@@ -1,4 +1,4 @@
-# Brickbot Architecture
+# Brickomations Architecture
 
 **For developers and contributors**
 
@@ -18,7 +18,7 @@
 
 ## Overview
 
-Brickbot is a config-driven data pipeline with a layered architecture that transforms personal data from external APIs into structured insights.
+Brickomations is a config-driven data pipeline with a layered architecture that transforms personal data from external APIs into structured insights.
 
 ### Core Philosophy
 
@@ -189,7 +189,7 @@ INTEGRATIONS: {
 
 ### Calendar Sync Patterns
 
-Brickbot supports different sync patterns based on data characteristics:
+Brickomations supports different sync patterns based on data characteristics:
 
 | Pattern        | Properties                                              | Behavior                     | Use For                        |
 | -------------- | ------------------------------------------------------- | ---------------------------- | ------------------------------ |
@@ -612,7 +612,7 @@ Each formatter converts workflow result objects into display-ready data structur
 
 ### Pull/Push Architecture
 
-Brickbot follows a local-first pattern: all Notion data is pulled to local JSON files, and edits are pushed back with delta detection.
+Brickomations follows a local-first pattern: all Notion data is pulled to local JSON files, and edits are pushed back with delta detection.
 
 ```
 ┌──────────────┐    yarn pull     ┌──────────────┐    yarn push     ┌──────────────┐
@@ -646,7 +646,7 @@ Brickbot follows a local-first pattern: all Notion data is pulled to local JSON 
 
 ### Automation
 
-Runs 9x/day via launchd (`infra/launchd/com.brickbot.daily.plist`):
+Runs 9x/day via launchd (`infra/launchd/com.brickomations.daily.plist`):
 
 ```
 tokens:refresh → collect → update → summarize → aggregate → pull → vault-sync
@@ -665,7 +665,7 @@ macOS banner notifications on success/failure. Logs: `local/logs/daily-YYYY-MM-D
 
 ## Interaction Patterns
 
-Brickbot has four interaction patterns:
+Brickomations has four interaction patterns:
 
 ### 1. CLI Commands
 Interactive commands for data pipeline operations (`yarn collect`, `yarn update`, `yarn summarize`, etc.).
@@ -674,7 +674,7 @@ Interactive commands for data pipeline operations (`yarn collect`, `yarn update`
 Non-interactive launchd automation running `tokens:refresh → collect → update → summarize → aggregate → pull → vault-sync` 9x/day with `--auto` flag. Fails fast on transient errors (3-min default step timeout, bail on token refresh failure, 15-min wall-clock cap on the full pipeline).
 
 ### 3. Vault Skills
-Reflection/planning slash commands (`/retro-week`, `/plan-*`, `/recap-month`) live in the Brickocampus vault, not in brickbot. They read/edit `data/*.json` and push back via `yarn push` — brickbot is the plumbing, the vault hosts the user-facing skills.
+Reflection/planning slash commands (`/retro-week`, `/plan-*`, `/recap-month`) live in the Brickocampus vault, not in brickomations. They read/edit `data/*.json` and push back via `yarn push` — brickomations is the plumbing, the vault hosts the user-facing skills.
 
 ### 4. HTML Viewers
 Static viewers for plan data (`yarn view`) and NYC guides (`yarn nyc`).

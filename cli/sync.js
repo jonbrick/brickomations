@@ -2,7 +2,7 @@
 
 /**
  * Sync CLI
- * Runs the full Brickbot pipeline: tokens:refresh → collect → update → summarize → aggregate → pull → vault-sync
+ * Runs the full Brickomations pipeline: tokens:refresh → collect → update → summarize → aggregate → pull → vault-sync
  * Called by launchd or manually via `yarn sync`
  *
  * Usage:
@@ -61,7 +61,7 @@ const rangeFlag = dateRangeFlags(range);
 // NOTE: `push` (local → Notion) is intentionally NOT in this pipeline. Nothing
 // edits data/*.json between automated runs, so an auto push could only ever
 // clobber Notion (the source of truth) with stale local state. `yarn push` is
-// manual + push-skill invoked only. See harden-brickbot-sync-layer-brief §4a.4.
+// manual + push-skill invoked only. See harden-brickomations-sync-layer-brief §4a.4.
 const STEPS = [
   { name: "tokens:refresh", cmd: `${NODE} cli/tokens/refresh.js --auto` },
   { name: "collect", cmd: `${NODE} cli/collect-data.js --auto${rangeFlag}` },
@@ -214,9 +214,9 @@ function main() {
     const label = isBackfill ? "backfill" : "auto";
     const weekDesc = range.weeks.map((w) => `W${w.weekNumber}/${w.year}`).join(", ");
     const monthDesc = range.months.map((m) => `${m.month}/${m.year}`).join(", ");
-    log(`=== Brickbot Run: ${new Date().toLocaleString()} [${label} ${range.from} → ${range.to}; weeks ${weekDesc}; months ${monthDesc}] ===`);
+    log(`=== Brickomations Run: ${new Date().toLocaleString()} [${label} ${range.from} → ${range.to}; weeks ${weekDesc}; months ${monthDesc}] ===`);
   } else {
-    log(`=== Brickbot Run: ${new Date().toLocaleString()} ===`);
+    log(`=== Brickomations Run: ${new Date().toLocaleString()} ===`);
   }
 
   const errors = [];
@@ -272,7 +272,7 @@ function main() {
 
   releaseLock();
 
-  // Write heartbeat ping. Watchdog (com.brickbot.watchdog) reads this and alerts
+  // Write heartbeat ping. Watchdog (com.brickomations.watchdog) reads this and alerts
   // via iMessage if the file is stale or status=failed. Silent on success.
   // See _automation/_automation-readme.md "Heartbeat design".
   const pingScript = path.join(projectDir, "scripts", "heartbeat-ping.sh");
@@ -295,7 +295,7 @@ function main() {
       .map((s) => (errorDetails[s] ? `${s} (${errorDetails[s]})` : s))
       .join(", ");
     if (autoMode) {
-      sendNotification("Brickbot", `Sync failed: ${failedSteps}. Check logs.`);
+      sendNotification("Brickomations", `Sync failed: ${failedSteps}. Check logs.`);
     }
     console.error(`Failed steps: ${failedSteps}`);
     process.exit(1);

@@ -434,7 +434,7 @@ async function pushLifeData(spinner) {
 // --- Main ---
 
 async function main() {
-  console.log("\n🤖 Brickbot - Push Data\n");
+  console.log("\n🤖 Brickomations - Push Data\n");
 
   if (dryRun) {
     console.log("ℹ️  Dry run mode: showing what would change, no API calls\n");

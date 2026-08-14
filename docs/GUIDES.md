@@ -1,4 +1,4 @@
-# Brickbot Extension Guides
+# Brickomations Extension Guides
 
 **How-to guides for extending the system**
 

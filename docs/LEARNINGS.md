@@ -1,4 +1,4 @@
-# What I Learned Building Brickbot
+# What I Learned Building Brickomations
 
 **Backend development principles discovered through building a personal data pipeline**
 

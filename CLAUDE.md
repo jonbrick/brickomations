@@ -1,22 +1,22 @@
 # CLAUDE.md
 
-Brickbot is a personal data pipeline: external APIs (GitHub, Oura, Strava, Steam, Withings) → Notion → Google Calendar → weekly/monthly summaries. Plain Node.js (CommonJS), no TypeScript, no automated tests.
+Brickomations is a personal data pipeline: external APIs (GitHub, Oura, Strava, Steam, Withings) → Notion → Google Calendar → weekly/monthly summaries. Plain Node.js (CommonJS), no TypeScript, no automated tests.
 
 ## Two repos
 
-Brickbot is one half of the Brickosystem; the other is the Brickocampus vault at `~/projects/brickocampus/` (Obsidian, in Obsidian's iCloud container). They're separate because brickbot has node_modules and a git history that iCloud would corrupt. `data/` is a symlink to `~/Documents/brickbot-data/data/` (iCloud Drive, outside the vault) — the Mac mini writes (`yarn pull`), the work MacBook reads. Don't run `yarn pull` from the MacBook — it races iCloud sync.
+Brickomations is one half of the Brickosystem; the other is the Brickocampus vault at `~/projects/brickocampus/` (Obsidian, in Obsidian's iCloud container). They're separate because brickomations has node_modules and a git history that iCloud would corrupt. `data/` is a symlink to `~/Documents/brickomations-data/data/` (iCloud Drive, outside the vault) — the Mac mini writes (`yarn pull`), the work MacBook reads. Don't run `yarn pull` from the MacBook — it races iCloud sync.
 
 Reflection/planning skills (`/retro-week`, `/plan-*`, `/recap-month`) live in the vault's `.claude/skills/`, not here. Launch Claude Code from the vault to use them.
 
 ## Gotchas
 
 - **`NOTION_*_DATABASE_ID` env vars hold database UUIDs, not data source UUIDs.** Use the 32-char ID from the `notion.so/<id>` URL — never the `collection://<id>` data source ID some tooling surfaces.
-- **Brickbot improvements / bugs aren't tracked here.** They live as personal projects in Notion (`2026 Projects` DB) with vault stubs at `~/projects/brickocampus/personal/projects/`. Don't add project or bug lists to this file — they churn the repo.
-- **Personal Google Calendars aren't on Claude's GCal MCP.** Claude's MCP runs as `jon.brick@cortex.io` (work) — it can read/write work calendars but returns `PrincipalImpl has no access to LazyEmailPrincipal` on any personal calendar (Sleep In, Normal Wake Up, Naps, Sober, Drinking, Workout, Reading, Meditation, Cooking, Art, Coding, Music, Video Games, Body Weight, Blood Pressure, Personal PRs, personalCalendar). **Escape hatch:** brickbot's `.env` has `PERSONAL_GOOGLE_REFRESH_TOKEN` on both machines; a local node script using `src/services/GoogleCalendarService.js` with `accountType = "personal"` can list/create/delete on any personal cal. Patterns:
+- **Brickomations improvements / bugs aren't tracked here.** They live as personal projects in Notion (`2026 Projects` DB) with vault stubs at `~/projects/brickocampus/personal/projects/`. Don't add project or bug lists to this file — they churn the repo.
+- **Personal Google Calendars aren't on Claude's GCal MCP.** Claude's MCP runs as `jon.brick@cortex.io` (work) — it can read/write work calendars but returns `PrincipalImpl has no access to LazyEmailPrincipal` on any personal calendar (Sleep In, Normal Wake Up, Naps, Sober, Drinking, Workout, Reading, Meditation, Cooking, Art, Coding, Music, Video Games, Body Weight, Blood Pressure, Personal PRs, personalCalendar). **Escape hatch:** brickomations's `.env` has `PERSONAL_GOOGLE_REFRESH_TOKEN` on both machines; a local node script using `src/services/GoogleCalendarService.js` with `accountType = "personal"` can list/create/delete on any personal cal. Patterns:
   - **Ad-hoc event batches (JSON-driven, reusable):** write events to `local/calendar/personal-events.json` (array of `{summary, start, end, calendar, description?, location?}`), then `node scripts/push-personal-cal-events.js [--dry-run]`. Idempotent (60-sec match window). Default route when Claude needs to drop time-blocked events on a personal cal.
   - **One-off cleanups (hardcoded data):** `scripts/cleanup-stale-oura-naps-on-gcal.js` is the template — copy and edit when the data is a fixed historical migration.
 
-  Don't waste MCP calls trying to reach personal cals — go straight to a brickbot-local script.
+  Don't waste MCP calls trying to reach personal cals — go straight to a brickomations-local script.
 
 ## Development principles
 

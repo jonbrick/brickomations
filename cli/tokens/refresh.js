@@ -20,7 +20,7 @@ const path = require("path");
 const autoMode = process.argv.includes("--auto");
 
 async function main() {
-  console.log("\n🔄 Brickbot - Token Refresher\n");
+  console.log("\n🔄 Brickomations - Token Refresher\n");
   console.log("This command refreshes OAuth2 tokens for services that support token refresh.");
   console.log("Note: API key services (Notion, Oura) don't expire and don't need refresh.\n");
 

@@ -21,7 +21,7 @@
  * Usage:
  *   node scripts/send-daily-text.js [--date YYYY-MM-DD] [--slot morning|evening] [--dry-run]
  *
- * The recipient number is read from brickbot's .env (ALERT_IMESSAGE_TARGET),
+ * The recipient number is read from brickomations's .env (ALERT_IMESSAGE_TARGET),
  * never hardcoded. Dry-run needs no send config at all.
  */
 
@@ -32,7 +32,7 @@ const { execFileSync } = require("child_process");
 
 const VAULT_DIR = path.join(os.homedir(), "projects", "brickocampus");
 const VAULT_NAME = "brickocampus";
-const BRICKBOT_DIR = path.join(os.homedir(), "projects", "brickomations");
+const BRICKOMATIONS_DIR = path.join(os.homedir(), "projects", "brickomations");
 
 // Each slot lifts exactly one `## ` zone from the daily note, verbatim.
 const ZONE_FOR_SLOT = {
@@ -244,7 +244,7 @@ function buildMessage({ lines, zone, relNoExt }) {
 // ---- send -----------------------------------------------------------------
 
 function readAlertTarget() {
-  const envPath = path.join(BRICKBOT_DIR, ".env");
+  const envPath = path.join(BRICKOMATIONS_DIR, ".env");
   if (!fs.existsSync(envPath)) {
     throw new Error(`.env not found at ${envPath}`);
   }
@@ -263,7 +263,7 @@ function sendIMessage(target, message) {
     set theBuddy to buddy "${esc(target)}" of theService
     send "${esc(message)}" to theBuddy
 end tell`;
-  const tmp = path.join(os.tmpdir(), `brickbot-daily-text-${process.pid}.applescript`);
+  const tmp = path.join(os.tmpdir(), `brickomations-daily-text-${process.pid}.applescript`);
   fs.writeFileSync(tmp, script);
   try {
     execFileSync("osascript", [tmp], { stdio: "ignore", timeout: 30000 });

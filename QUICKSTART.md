@@ -1,8 +1,8 @@
-# Brickbot Quickstart
+# Brickomations Quickstart
 
 **5-minute overview for first-time readers**
 
-## What is Brickbot?
+## What is Brickomations?
 
 Personal data pipeline that automatically collects data from external sources (GitHub, Oura, Strava, Steam, Withings), stores it in Notion, creates Google Calendar events, and generates AI-powered insights about your productivity, health, and habits.
 

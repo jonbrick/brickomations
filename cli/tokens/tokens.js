@@ -54,7 +54,7 @@ function updateEnvFile(updates) {
 }
 
 async function main() {
-  console.log("\n🔑 Brickbot - Tokens (check & refresh)\n");
+  console.log("\n🔑 Brickomations - Tokens (check & refresh)\n");
 
   try {
     const tokenService = new TokenService();

@@ -25,7 +25,7 @@ const OAUTH_SERVICES = [
 ];
 
 async function main() {
-  console.log("\n🔧 Brickbot - OAuth Setup Wizard\n");
+  console.log("\n🔧 Brickomations - OAuth Setup Wizard\n");
 
   try {
     // 1. Select services to setup
