@@ -24,6 +24,7 @@ const years = require("./years");
 const months = require("./months");
 const weeks = require("./weeks");
 const rocks = require("./rocks");
+const linearMirror = require("./linear-mirror");
 const nycMuseums = require("./nyc-museums");
 const nycRestaurants = require("./nyc-restaurants");
 const nycTattoos = require("./nyc-tattoos");
@@ -52,6 +53,7 @@ const databases = {
   months: months.database,
   weeks: weeks.database,
   rocks: rocks.database,
+  linearMirror: linearMirror.database,
   nycMuseums: nycMuseums.database,
   nycRestaurants: nycRestaurants.database,
   nycTattoos: nycTattoos.database,
@@ -81,6 +83,7 @@ const properties = {
   months: months.properties,
   weeks: weeks.properties,
   rocks: rocks.properties,
+  linearMirror: linearMirror.properties,
   nycMuseums: nycMuseums.properties,
   nycRestaurants: nycRestaurants.properties,
   nycTattoos: nycTattoos.properties,

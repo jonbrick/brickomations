@@ -35,6 +35,7 @@ const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
 const LinearService = require("../src/services/LinearService");
+const { syncLinearMirror } = require("../src/workflows/linear-to-notion-mirror");
 const { readFileSyncRetry, writeFileSyncRetry } = require("../src/utils/fs-retry");
 
 const REPO_ROOT = path.join(__dirname, "..");
@@ -237,7 +238,22 @@ async function main() {
   );
   console.log(`✅ data/workTasks.json written (${tasks.length} issues)`);
 
-  pingHeartbeat("ok", `${projects.length} projects, ${tasks.length} issues`);
+  // Linear → Notion mirror: Notion is the source of trust for phone-side
+  // retro/planning. Upsert on Linear ID; absent issues marked Gone.
+  // TODO(retire-local-linear-pull): once the mirror is proven, the JSON
+  // caches above should derive from Notion (via vault-sync) instead of
+  // Linear directly — local must become a pure read of Notion.
+  const mirror = await syncLinearMirror(tasks);
+  console.log(
+    `✅ Notion mirror synced (${mirror.created} created, ${mirror.updated} updated, ` +
+      `${mirror.gone} marked gone, ${mirror.unchanged} unchanged)`
+  );
+
+  pingHeartbeat(
+    "ok",
+    `${projects.length} projects, ${tasks.length} issues, mirror ` +
+      `+${mirror.created}/~${mirror.updated}/gone ${mirror.gone}`
+  );
 }
 
 // unref'd so a clean finish exits immediately; still fires if a hung
