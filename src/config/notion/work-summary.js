@@ -8,6 +8,15 @@ const { generateWorkSummaryProperties } = require("../unified-sources");
 // Generate properties dynamically from main.js
 const properties = generateWorkSummaryProperties();
 
+// Legacy read-only column: weekly summaries stopped writing Research 2026-08
+// (🧪 Research merged into 💡 Exploration), but monthly recaps still read
+// this column's pre-migration history.
+properties.researchTaskDetails = {
+  name: "Research Task Details",
+  type: "text",
+  enabled: true,
+};
+
 // Generate fieldMappings automatically (identity mappings)
 const fieldMappings = {};
 Object.keys(properties).forEach((key) => {
