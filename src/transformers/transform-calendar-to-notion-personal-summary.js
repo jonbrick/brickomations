@@ -513,7 +513,18 @@ function transformCalendarEventsToRecapData(
     tasks.forEach((task) => {
       let categoryKey = getCategoryKey(task.category);
 
+      // Personal sub-category (Hobbies, Home, Admin, …) overrides the
+      // top-level Personal bucket. Category itself is now the binary
+      // (💼 Work / 🌱 Personal) — subcategories live in PERSONAL Category.
+      if (categoryKey === "personal") {
+        const personalSubKey = getPersonalCategoryKey(task.personalCategory);
+        if (personalSubKey) {
+          categoryKey = personalSubKey;
+        }
+      }
+
       // Split interpersonal tasks into family/relationship/interpersonal
+      // (must run after sub-category resolution)
       if (categoryKey === "interpersonal") {
         const pseudoEvent = { summary: task.title };
         categoryKey = matchInterpersonalCategory(
@@ -521,14 +532,6 @@ function transformCalendarEventsToRecapData(
           currentWeekNumber,
           relationships
         );
-      }
-
-      // Personal sub-category (Coding, Admin) overrides the top-level Personal bucket
-      if (categoryKey === "personal") {
-        const personalSubKey = getPersonalCategoryKey(task.personalCategory);
-        if (personalSubKey) {
-          categoryKey = personalSubKey;
-        }
       }
 
       if (categoryKey && categoryKey !== "work") {
