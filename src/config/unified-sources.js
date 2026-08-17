@@ -468,13 +468,17 @@ const CALENDARS = {
           "Mental Health",
         ),
       },
-      admin: {
-        emoji: "📝",
-        dataFields: FIELD_TEMPLATES.taskCategory("admin", "Admin"),
+      personalAdmin: {
+        emoji: "🌱",
+        dataFields: FIELD_TEMPLATES.taskCategory("personalAdmin", "Personal Admin"),
       },
-      coding: {
-        emoji: "🖥️",
-        dataFields: FIELD_TEMPLATES.taskCategory("coding", "Coding"),
+      hobbies: {
+        emoji: "🎸",
+        dataFields: FIELD_TEMPLATES.taskCategory("hobbies", "Hobbies"),
+      },
+      cooking: {
+        emoji: "🍗",
+        dataFields: FIELD_TEMPLATES.taskCategory("cooking", "Cooking"),
       },
     },
   },
@@ -485,13 +489,11 @@ const CALENDARS = {
     emoji: "💼",
     dataFields: [],
     categories: {
-      research: {
-        emoji: "🧪",
-        dataFields: FIELD_TEMPLATES.taskCategory("research", "Research"),
-      },
+      // "sketch"/"crit" keys kept for Notion column history — the Notion
+      // select options are now 💡 Exploration and ⚠️ Critique.
       sketch: {
         emoji: "💡",
-        dataFields: FIELD_TEMPLATES.taskCategory("sketch", "Sketch"),
+        dataFields: FIELD_TEMPLATES.taskCategory("sketch", "Exploration"),
       },
       design: {
         emoji: "🎨",
@@ -503,7 +505,7 @@ const CALENDARS = {
       },
       crit: {
         emoji: "⚠️",
-        dataFields: FIELD_TEMPLATES.taskCategory("crit", "Crit"),
+        dataFields: FIELD_TEMPLATES.taskCategory("crit", "Critique"),
       },
       qa: {
         emoji: "🔎",
@@ -513,17 +515,9 @@ const CALENDARS = {
         emoji: "🤝",
         dataFields: FIELD_TEMPLATES.taskCategory("hiring", "Hiring"),
       },
-      admin: {
-        emoji: "📝",
-        dataFields: FIELD_TEMPLATES.taskCategory("admin", "Admin"),
-      },
-      social: {
-        emoji: "🍸",
-        dataFields: FIELD_TEMPLATES.taskCategory("social", "Social"),
-      },
-      ooo: {
-        emoji: "🏝️",
-        dataFields: FIELD_TEMPLATES.taskCategory("ooo", "OOO"),
+      workAdmin: {
+        emoji: "💼",
+        dataFields: FIELD_TEMPLATES.taskCategory("workAdmin", "Work Admin"),
       },
     },
   },
@@ -2070,8 +2064,12 @@ const MONTHLY_RECAP_CATEGORIES = {
       home: ["homeTaskDetails"],
       physicalHealth: ["physicalHealthTaskDetails"],
       mentalHealth: ["mentalHealthTaskDetails"],
-      admin: ["adminTaskDetails"],
-      coding: ["codingTaskDetails"],
+      admin: ["personalAdminTaskDetails"],
+      // codingTaskDetails is the legacy personal-coding column (weekly
+      // summaries stopped writing it 2026-08; personal coding is now
+      // 🎸 Hobbies) — folded in so recaps spanning older weeks keep it.
+      hobbies: ["hobbiesTaskDetails", "codingTaskDetails"],
+      cooking: ["cookingTaskDetails"],
     },
   },
   work: {
@@ -2082,7 +2080,7 @@ const MONTHLY_RECAP_CATEGORIES = {
     tasks: {
       design: ["designTaskDetails"],
       research: ["researchTaskDetails"],
-      admin: ["adminTaskDetails"],
+      admin: ["workAdminTaskDetails"],
       coding: ["codingTaskDetails"],
       qa: ["qaTaskDetails"],
       hiring: ["hiringTaskDetails"],
@@ -2300,6 +2298,8 @@ const MONTHLY_RECAP_TASK_PROPERTIES = {
       name: "Mental Health Task Details",
     },
     admin: { key: "personalAdminTasks", name: "Admin Task Details" },
+    hobbies: { key: "personalHobbiesTasks", name: "Hobbies Task Details" },
+    cooking: { key: "personalCookingTasks", name: "Cooking Task Details" },
   },
   work: {
     design: { key: "workDesignTasks", name: "Design Task Details" },

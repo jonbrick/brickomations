@@ -1,32 +1,37 @@
 /**
  * Task Category Mappings
- * Maps task Category values (with emojis) to Personal Summary property keys
+ * Maps task Category values (with emojis) to Summary property keys
+ *
+ * Two-field model (migrated 2026-08-16): Category is the binary
+ * (💼 Work / 🌱 Personal); subcategories live in WORK Category and
+ * PERSONAL Category (7 options each).
  */
 
 const TASK_CATEGORY_MAPPING = {
-  "💪 Physical Health": "physicalHealth",
   "🌱 Personal": "personal",
-  "🍻 Interpersonal": "interpersonal",
-  "❤️ Mental Health": "mentalHealth",
-  "🏠 Home": "home",
-  "💼 Work": "work", // Note: Work tasks excluded from CSV, handle gracefully
+  "💼 Work": "work",
 };
 
+// Exploration/Critique keep the legacy sketch/crit summary keys so the
+// existing weekly-summary Notion columns keep their history.
 const WORK_TASK_CATEGORY_MAPPING = {
-  "🧪 Research": "research",
-  "💡 Sketch": "sketch",
   "🎨 Design": "design",
   "🖥️ Coding": "coding",
-  "⚠️ Crit": "crit",
+  "💡 Exploration": "sketch",
   "🔎 QA": "qa",
+  "⚠️ Critique": "crit",
   "🤝 Hiring": "hiring",
-  "📝 Admin": "admin",
-  "🍸 Social": "social",
-  "🏝️ OOO": "ooo",
+  "💼 Admin": "workAdmin",
 };
 
 const PERSONAL_TASK_CATEGORY_MAPPING = {
-  "📝 Admin": "admin",
+  "🎸 Hobbies": "hobbies",
+  "🍻 Interpersonal": "interpersonal",
+  "🏠 Home": "home",
+  "🍗 Cooking": "cooking",
+  "💪 Physical Health": "physicalHealth",
+  "❤️ Mental Health": "mentalHealth",
+  "🌱 Admin": "personalAdmin",
 };
 
 const TASK_STATUS_MAPPING = {
@@ -58,8 +63,8 @@ function getCategoryKey(taskType) {
 
 /**
  * Get work category key from Work Category property value
- * @param {string|null|undefined} workCategory - Work Category property value (e.g., "🧪 Research", "📝 Admin")
- * @returns {string|null} Category key (e.g., "research", "admin") or null if unmapped
+ * @param {string|null|undefined} workCategory - Work Category property value (e.g., "💡 Exploration", "📝 Admin")
+ * @returns {string|null} Category key (e.g., "sketch", "workAdmin") or null if unmapped
  */
 function getWorkCategoryKey(workCategory) {
   if (!workCategory) {
@@ -72,7 +77,7 @@ function getWorkCategoryKey(workCategory) {
 /**
  * Get personal sub-category key from Personal Category property value
  * @param {string|null|undefined} personalCategory - Personal Category property value (e.g., "📝 Admin")
- * @returns {string|null} Category key (e.g., "coding", "admin") or null if unmapped
+ * @returns {string|null} Category key (e.g., "hobbies", "personalAdmin") or null if unmapped
  */
 function getPersonalCategoryKey(personalCategory) {
   if (!personalCategory) {
