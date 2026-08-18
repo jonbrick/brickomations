@@ -143,6 +143,7 @@ function toTaskRecord(node, weeks) {
     Project: node.project ? node.project.name : "",
     Team: node.team ? node.team.key : "",
     "Completed At": node.completedAt || "",
+    "Canceled At": node.canceledAt || "",
   };
 }
 
