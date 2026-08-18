@@ -20,7 +20,7 @@ const SHORT_NAME_OVERRIDES = {
   // Category overrides
   physicalHealth: "Physical",
   mentalHealth: "Mental",
-  personalAndSocial: "Personal",
+  workAdmin: "Work Admin",
 
   // Field-specific overrides
   avgSystolic: "Systolic",

@@ -22,18 +22,21 @@ const PERSONAL_COLOR_MAPPING = {
 // Color names below match Google's event-color palette (colorId → name) documented
 // at the bottom of this file. colorId 1 (Lavender) is the calendar's default; work
 // events left uncolored arrive as colorId=null and fall through to "meetings".
+// Re-mapped 2026-08-17 to match the relabeled Google Calendar color legend
+// (verified against live events: Design Crit=5, interviews=10, standups=4,
+// A&G Update=9, OpEx iteration=2, Focus Lab=1).
 const WORK_COLOR_MAPPING = {
-  1: { category: "meetings", displayName: "Meetings" }, // Lavender
+  1: { category: "marketing", displayName: "Marketing & Branding" }, // Lavender (explicitly colored; uncolored events default to Meetings)
   2: { category: "design", displayName: "Design" }, // Sage
-  3: { category: "coding", displayName: "Coding" }, // Grape
+  3: { category: "marketing", displayName: "Marketing & Branding" }, // Grape (both purples map to marketing; keyword rule also catches uncolored)
   4: { category: "rituals", displayName: "Rituals" }, // Flamingo
-  5: { category: "crit", displayName: "Crit" }, // Banana
-  6: { category: "sketch", displayName: "Sketch" }, // Tangerine
-  7: { category: "research", displayName: "Research" }, // Peacock
-  8: { category: "personalAndSocial", displayName: "Personal & Social" }, // Graphite
-  9: { category: "admin", displayName: "Admin" }, // Blueberry
+  5: { category: "critique", displayName: "Critique" }, // Banana
+  6: { category: "qa", displayName: "QA" }, // Tangerine
+  7: { category: "coding", displayName: "Coding" }, // Peacock
+  8: { category: "personal", displayName: "Personal" }, // Graphite
+  9: { category: "workAdmin", displayName: "Work Admin" }, // Blueberry
   10: { category: "hiring", displayName: "Hiring" }, // Basil
-  11: { category: "qa", displayName: "QA" }, // Tomato
+  11: { category: "exploration", displayName: "Exploration & Research" }, // Tomato
 };
 
 // Keyword-based work category overrides (title-driven, color-independent).
