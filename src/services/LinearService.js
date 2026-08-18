@@ -155,6 +155,7 @@ class LinearService {
                 dueDate
                 priorityLabel
                 completedAt
+                canceledAt
                 state { name type }
                 assignee { name }
                 project { name }

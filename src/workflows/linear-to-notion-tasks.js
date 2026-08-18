@@ -7,7 +7,8 @@
 //     Linear ID, Linear URL. Editing these in Notion gets reverted next
 //     run — that edit belongs in Linear.
 //   - Jon-owned, never touched: Category (set to 💼 Work on create only),
-//     WORK Category, Notes, relations, everything else. Week Number is a
+//     WORK Category (seeded from the Linear team on create only — DSGN →
+//     🎨 Design, DE → 🖥️ Coding), Notes, relations, everything else. Week Number is a
 //     Notion formula off Due Date — nothing to write.
 //   - Rows without a Linear ID (personal + flexible work tasks) are
 //     invisible to the sync.
@@ -48,12 +49,36 @@ const PRIORITY_MAP = { Urgent: "Urgent", High: "High", Medium: "Med", Low: "Low"
 
 const CREATE_ONLY_CATEGORY = "💼 Work";
 
+// WORK Category is Jon-owned like Category: seeded from the issue's Linear
+// team on create only, never overwritten. Unmapped teams get no seed.
+const CREATE_ONLY_WORK_CATEGORY_BY_TEAM = {
+  DSGN: "🎨 Design",
+  DE: "🖥️ Coding",
+};
+
+// Linear stamps completedAt/canceledAt in UTC — a late-evening close in NYC
+// would otherwise land on the next calendar day (and the wrong week).
+function nyDateOf(isoTimestamp) {
+  return new Date(isoTimestamp).toLocaleDateString("en-CA", {
+    timeZone: "America/New_York",
+  });
+}
+
+// Settled issues rarely carry a Linear due date, but a dateless 🟢 Done /
+// 🛑 Canceled row never lands in any week of the Notion record — fall back
+// to the day the issue was closed.
+function effectiveDueDate(task) {
+  if (task["Due Date"]) return task["Due Date"];
+  const settledAt = task["Completed At"] || task["Canceled At"];
+  return settledAt ? nyDateOf(settledAt) : "";
+}
+
 /** Plain string values for change detection (compared via extractProperty). */
 function syncedValues(task) {
   return {
     Task: task.Task,
     Status: STATUS_BY_STATE_TYPE[task["State Type"]] || "🔴 To Do",
-    "Due Date": task["Due Date"] || "",
+    "Due Date": effectiveDueDate(task),
     Priority: PRIORITY_MAP[task.Priority] || "",
     "Linear ID": task.Identifier,
     "Linear URL": task.URL,
@@ -131,9 +156,16 @@ async function syncLinearTasks(tasks, opts = {}) {
       );
       counts.created++;
       if (dryRun) continue;
+      const workCategory = CREATE_ONLY_WORK_CATEGORY_BY_TEAM[task.Team];
       await db.createPage(
         databaseId,
-        { ...toPayload(values), Category: { select: { name: CREATE_ONLY_CATEGORY } } },
+        {
+          ...toPayload(values),
+          Category: { select: { name: CREATE_ONLY_CATEGORY } },
+          ...(workCategory
+            ? { "WORK Category": { select: { name: workCategory } } }
+            : {}),
+        },
         [],
         CONFIG_KEY
       );
