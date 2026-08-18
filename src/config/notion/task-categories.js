@@ -12,14 +12,12 @@ const TASK_CATEGORY_MAPPING = {
   "💼 Work": "work",
 };
 
-// Exploration/Critique keep the legacy sketch/crit summary keys so the
-// existing weekly-summary Notion columns keep their history.
 const WORK_TASK_CATEGORY_MAPPING = {
   "🎨 Design": "design",
   "🖥️ Coding": "coding",
-  "💡 Exploration": "sketch",
+  "💡 Exploration": "exploration",
   "🔎 QA": "qa",
-  "⚠️ Critique": "crit",
+  "⚠️ Critique": "critique",
   "🤝 Hiring": "hiring",
   "💼 Admin": "workAdmin",
 };
@@ -64,7 +62,7 @@ function getCategoryKey(taskType) {
 /**
  * Get work category key from Work Category property value
  * @param {string|null|undefined} workCategory - Work Category property value (e.g., "💡 Exploration", "📝 Admin")
- * @returns {string|null} Category key (e.g., "sketch", "workAdmin") or null if unmapped
+ * @returns {string|null} Category key (e.g., "exploration", "workAdmin") or null if unmapped
  */
 function getWorkCategoryKey(workCategory) {
   if (!workCategory) {

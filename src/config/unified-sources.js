@@ -377,24 +377,20 @@ const CALENDARS = {
         emoji: "🖥️",
         dataFields: FIELD_TEMPLATES.categoryActivity("coding", "Coding"),
       },
-      crit: {
+      critique: {
         emoji: "⚠️",
-        dataFields: FIELD_TEMPLATES.categoryActivity("crit", "Crit"),
+        dataFields: FIELD_TEMPLATES.categoryActivity("critique", "Critique"),
       },
-      sketch: {
+      exploration: {
         emoji: "💡",
-        dataFields: FIELD_TEMPLATES.categoryActivity("sketch", "Sketch"),
-      },
-      research: {
-        emoji: "🧪",
-        dataFields: FIELD_TEMPLATES.categoryActivity("research", "Research"),
-      },
-      personalAndSocial: {
-        emoji: "🌱",
         dataFields: FIELD_TEMPLATES.categoryActivity(
-          "personalAndSocial",
-          "Personal & Social",
+          "exploration",
+          "Exploration",
         ),
+      },
+      personal: {
+        emoji: "🌱",
+        dataFields: FIELD_TEMPLATES.categoryActivity("personal", "Personal"),
       },
       rituals: {
         emoji: "🔁",
@@ -408,9 +404,9 @@ const CALENDARS = {
         emoji: "🤝",
         dataFields: FIELD_TEMPLATES.categoryActivity("hiring", "Hiring"),
       },
-      admin: {
-        emoji: "📝",
-        dataFields: FIELD_TEMPLATES.categoryActivity("admin", "Admin"),
+      workAdmin: {
+        emoji: "💼",
+        dataFields: FIELD_TEMPLATES.categoryActivity("workAdmin", "Work Admin"),
       },
       marketing: {
         emoji: "📣",
@@ -489,11 +485,9 @@ const CALENDARS = {
     emoji: "💼",
     dataFields: [],
     categories: {
-      // "sketch"/"crit" keys kept for Notion column history — the Notion
-      // select options are now 💡 Exploration and ⚠️ Critique.
-      sketch: {
+      exploration: {
         emoji: "💡",
-        dataFields: FIELD_TEMPLATES.taskCategory("sketch", "Exploration"),
+        dataFields: FIELD_TEMPLATES.taskCategory("exploration", "Exploration"),
       },
       design: {
         emoji: "🎨",
@@ -503,9 +497,9 @@ const CALENDARS = {
         emoji: "🖥️",
         dataFields: FIELD_TEMPLATES.taskCategory("coding", "Coding"),
       },
-      crit: {
+      critique: {
         emoji: "⚠️",
-        dataFields: FIELD_TEMPLATES.taskCategory("crit", "Critique"),
+        dataFields: FIELD_TEMPLATES.taskCategory("critique", "Critique"),
       },
       qa: {
         emoji: "🔎",
@@ -2075,7 +2069,7 @@ const MONTHLY_RECAP_CATEGORIES = {
   work: {
     blocks: {
       meetings: ["meetingsBlocks"],
-      social: ["personalAndSocialBlocks"],
+      social: ["personalBlocks"],
     },
     tasks: {
       design: ["designTaskDetails"],
@@ -2084,7 +2078,7 @@ const MONTHLY_RECAP_CATEGORIES = {
       coding: ["codingTaskDetails"],
       qa: ["qaTaskDetails"],
       hiring: ["hiringTaskDetails"],
-      sketch: ["sketchTaskDetails"],
+      sketch: ["explorationTaskDetails"],
     },
   },
 };
@@ -2170,7 +2164,7 @@ const CONTENT_FILTERS = {
       // sketchBlocks: [],
       // researchBlocks: [],
       // Filter-out-words
-      personalAndSocialBlocks: ["lunch"],
+      personalBlocks: ["lunch"],
       // ritualsBlocks: [],
       // qaBlocks: [],
       // adminBlocks: [],
