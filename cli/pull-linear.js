@@ -12,10 +12,11 @@
  *     session-time, and `updatedAt` lets sessions flag stale projects.
  *
  *   data/workTasks.json — issues assigned to the authenticated user, any
- *     team, every state except canceled. Completed issues kept 21 days
- *     back. Columns mirror Notion 2026 Tasks where a true equivalent
- *     exists (Task, Status, Due Date, Priority, Week Number); Status
- *     speaks Linear's native vocabulary, verbatim-from-source.
+ *     team, every state. Completed and canceled issues kept 21 days back.
+ *     Columns mirror Notion 2026 Tasks where a true equivalent exists
+ *     (Task, Status, Due Date, Priority, Week Number); Status speaks
+ *     Linear's native vocabulary, verbatim-from-source, with State Type
+ *     alongside for type-based mapping.
  *
  * Deliberately separate from `yarn pull` / `yarn sync`: a Linear failure
  * must not stale the Notion/Calendar caches. Own launchd job
@@ -25,7 +26,11 @@
  * has succeeded; any error leaves the existing caches untouched, pings
  * the heartbeat as failed, and exits 1.
  *
- * Usage: yarn pull:linear
+ * Usage: yarn pull:linear [--dry-run]
+ *
+ * --dry-run reads Linear and Notion, prints the would-be Notion actions
+ * (creates/updates/gone), and writes nothing — no JSON caches, no Notion
+ * writes, no heartbeat ping.
  *
  * @layer 1 - Integration (CLI)
  */
@@ -35,13 +40,14 @@ const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
 const LinearService = require("../src/services/LinearService");
-const { syncLinearMirror } = require("../src/workflows/linear-to-notion-mirror");
+const { syncLinearTasks } = require("../src/workflows/linear-to-notion-tasks");
 const { readFileSyncRetry, writeFileSyncRetry } = require("../src/utils/fs-retry");
 
 const REPO_ROOT = path.join(__dirname, "..");
 const DATA_DIR = path.join(REPO_ROOT, "data");
 const HEARTBEAT_SCRIPT = path.join(REPO_ROOT, "scripts", "heartbeat-ping.sh");
 const JOB_NAME = "pull-linear";
+const DRY_RUN = process.argv.includes("--dry-run");
 
 const PROJECT_STATES = ["started", "planned"];
 const COMPLETED_WINDOW_DAYS = 21;
@@ -53,6 +59,7 @@ const WALL_CLOCK_TIMEOUT_MS = 3 * 60 * 1000;
 // --- Heartbeat ---
 
 function pingHeartbeat(status, message) {
+  if (DRY_RUN) return; // a rehearsal is not a run — don't touch the heartbeat
   try {
     const args = [JOB_NAME, status];
     if (message) args.push(message);
@@ -123,6 +130,9 @@ function toTaskRecord(node, weeks) {
   return {
     Task: node.title,
     Status: node.state.name,
+    // Linear state *type* (backlog/unstarted/started/completed/canceled) —
+    // the Notion sync maps by type, never by team-specific state names.
+    "State Type": node.state.type,
     "Due Date": node.dueDate || "",
     // Linear's "No priority" is Notion's blank — absence, not a value.
     Priority: node.priorityLabel === "No priority" ? "" : node.priorityLabel,
@@ -198,6 +208,17 @@ async function main() {
     return ad.localeCompare(bd) || a.Identifier.localeCompare(b.Identifier);
   });
 
+  if (DRY_RUN) {
+    const sync = await syncLinearTasks(tasks, { dryRun: true });
+    console.log(
+      `\n[dry-run] plan: ${sync.created} create, ${sync.updated} update, ` +
+        `${sync.gone} gone, ${sync.unchanged} unchanged`
+    );
+    for (const action of sync.actions) console.log(`  ${action}`);
+    console.log("\n[dry-run] nothing written (no caches, no Notion, no heartbeat)");
+    return;
+  }
+
   // Every fetch succeeded — only now touch the caches (never partial).
   const now = new Date().toISOString();
 
@@ -238,21 +259,22 @@ async function main() {
   );
   console.log(`✅ data/workTasks.json written (${tasks.length} issues)`);
 
-  // Linear → Notion mirror: Notion is the source of trust for phone-side
-  // retro/planning. Upsert on Linear ID; absent issues marked Gone.
-  // TODO(retire-local-linear-pull): once the mirror is proven, the JSON
+  // Linear → Notion: upsert issues into the shared 2026 Tasks DB so Notion
+  // is the one holistic layer for phone-side retro/planning. Upsert on
+  // Linear ID; absent issues marked 🫥 Gone (settled rows left alone).
+  // TODO(retire-local-linear-pull): once the ingestion is proven, the JSON
   // caches above should derive from Notion (via vault-sync) instead of
   // Linear directly — local must become a pure read of Notion.
-  const mirror = await syncLinearMirror(tasks);
+  const sync = await syncLinearTasks(tasks);
   console.log(
-    `✅ Notion mirror synced (${mirror.created} created, ${mirror.updated} updated, ` +
-      `${mirror.gone} marked gone, ${mirror.unchanged} unchanged)`
+    `✅ Notion 2026 Tasks synced (${sync.created} created, ${sync.updated} updated, ` +
+      `${sync.gone} marked gone, ${sync.unchanged} unchanged)`
   );
 
   pingHeartbeat(
     "ok",
-    `${projects.length} projects, ${tasks.length} issues, mirror ` +
-      `+${mirror.created}/~${mirror.updated}/gone ${mirror.gone}`
+    `${projects.length} projects, ${tasks.length} issues, notion ` +
+      `+${sync.created}/~${sync.updated}/gone ${sync.gone}`
   );
 }
 

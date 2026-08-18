@@ -126,16 +126,17 @@ class LinearService {
   }
 
   /**
-   * Issues assigned to the authenticated user, any team, every state except
-   * canceled. Completed issues only within the given cutoff window (ISO
-   * datetime) — older ones fall out of the cache.
+   * Issues assigned to the authenticated user, any team, every state.
+   * Completed and canceled issues only within the given cutoff window (ISO
+   * datetime) — older ones fall out of the cache. Canceled issues are kept
+   * so the Notion sync can mark them 🛑 Canceled rather than 🫥 Gone.
    */
   async getAssignedIssues(completedCutoff) {
     const filter = {
-      state: { type: { neq: "canceled" } },
       or: [
-        { completedAt: { null: true } },
+        { and: [{ completedAt: { null: true } }, { canceledAt: { null: true } }] },
         { completedAt: { gt: completedCutoff } },
+        { canceledAt: { gt: completedCutoff } },
       ],
     };
 
