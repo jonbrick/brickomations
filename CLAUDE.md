@@ -4,7 +4,7 @@ Brickomations is a personal data pipeline: external APIs (GitHub, Oura, Strava, 
 
 ## Two repos
 
-Brickomations is one half of the Brickosystem; the other is the Brickocampus vault at `~/projects/brickocampus/` (Obsidian, in Obsidian's iCloud container). They're separate because brickomations has node_modules and a git history that iCloud would corrupt. `data/` is a symlink to `~/Documents/brickomations-data/data/` (iCloud Drive, outside the vault) — the Mac mini writes (`yarn pull`), the work MacBook reads. Don't run `yarn pull` from the MacBook — it races iCloud sync.
+Brickomations is one half of the Brickosystem; the other is the Brickocampus vault at `~/projects/brickocampus/` (Obsidian, in Obsidian's iCloud container). They're separate because brickomations has node_modules and a git history that iCloud would corrupt. `data/` is a symlink to `~/Documents/brickography/data/` (iCloud Drive, outside the vault — the local copy of Brickography) — the Mac mini writes (`yarn pull`), the work MacBook reads. Don't run `yarn pull` from the MacBook — it races iCloud sync.
 
 Reflection/planning skills (`/retro-week`, `/plan-*`, `/recap-month`) live in the vault's `.claude/skills/`, not here. Launch Claude Code from the vault to use them.
 
