@@ -25,6 +25,7 @@ const months = require("./months");
 const weeks = require("./weeks");
 const rocks = require("./rocks");
 const linearTasks = require("./linear-tasks");
+const linearProjects = require("./linear-projects");
 const nycMuseums = require("./nyc-museums");
 const nycRestaurants = require("./nyc-restaurants");
 const nycTattoos = require("./nyc-tattoos");
@@ -54,6 +55,7 @@ const databases = {
   weeks: weeks.database,
   rocks: rocks.database,
   linearTasks: linearTasks.database,
+  linearProjects: linearProjects.database,
   nycMuseums: nycMuseums.database,
   nycRestaurants: nycRestaurants.database,
   nycTattoos: nycTattoos.database,
@@ -84,6 +86,7 @@ const properties = {
   weeks: weeks.properties,
   rocks: rocks.properties,
   linearTasks: linearTasks.properties,
+  linearProjects: linearProjects.properties,
   nycMuseums: nycMuseums.properties,
   nycRestaurants: nycRestaurants.properties,
   nycTattoos: nycTattoos.properties,
