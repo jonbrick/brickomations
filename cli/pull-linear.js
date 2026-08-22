@@ -18,6 +18,11 @@
  *     Linear's native vocabulary, verbatim-from-source, with State Type
  *     alongside for type-based mapping.
  *
+ * Also the Linear → Notion collector: upserts assigned issues into the
+ * shared 2026 Tasks DB and assigned projects (lead or member, any state,
+ * on the LINEAR_PROJECT_TEAM_KEYS teams) into the shared 2026 Projects
+ * DB, so Notion is the one holistic layer for phone-side retro/planning.
+ *
  * Deliberately separate from `yarn pull` / `yarn sync`: a Linear failure
  * must not stale the Notion/Calendar caches. Own launchd job
  * (com.brickomations.pull-linear), own heartbeat ping.
@@ -41,6 +46,9 @@ const path = require("path");
 const { execFileSync } = require("child_process");
 const LinearService = require("../src/services/LinearService");
 const { syncLinearTasks } = require("../src/workflows/linear-to-notion-tasks");
+const {
+  syncLinearProjects,
+} = require("../src/workflows/linear-to-notion-projects");
 const { readFileSyncRetry, writeFileSyncRetry } = require("../src/utils/fs-retry");
 
 const REPO_ROOT = path.join(__dirname, "..");
@@ -126,6 +134,29 @@ function toProjectRecord(node, teamKey, viewerId) {
   };
 }
 
+/**
+ * Slim record for the Notion 2026 Projects upsert — distinct from
+ * toProjectRecord (the workProjects.json cache shape): different fetch
+ * (assigned-to-me + configured teams, all states vs. team +
+ * started/planned) and only the fields the sync writes. Linear ID is the
+ * project UUID — projects have no DSGN-123-style identifier.
+ */
+function toAssignedProjectRecord(node) {
+  return {
+    Id: node.id,
+    Name: node.name,
+    URL: node.url,
+    // Linear project state type: backlog/planned/started/paused/completed/canceled
+    State: node.state,
+    Priority: node.priorityLabel === "No priority" ? "" : node.priorityLabel,
+    "Start Date": node.startDate || "",
+    "Target Date": node.targetDate || "",
+    // A Linear project belongs to a teams *list* — kept whole so the sync
+    // can seed Work Category from the first mapped key.
+    Teams: (node.teams?.nodes || []).map((t) => t.key),
+  };
+}
+
 function toTaskRecord(node, weeks) {
   return {
     Task: node.title,
@@ -201,6 +232,23 @@ async function main() {
     `  ✓ ${issues.length} assigned issues (completed kept ${COMPLETED_WINDOW_DAYS} days back)`
   );
 
+  // The Notion projects leg pulls by assignment (lead or member), all
+  // states, scoped to the configured teams — cross-team projects Jon is
+  // merely attached to (e.g. as a stakeholder) stay out. Independent of
+  // the started/planned-only workProjects.json fetch above, which stays
+  // unchanged until the retire-Linear-direct-caches ticket.
+  const assignedNodes = await linear.getAssignedProjects(viewer.id);
+  const teamScopedNodes = assignedNodes.filter((node) =>
+    (node.teams?.nodes || []).some((t) => teamKeys.includes(t.key))
+  );
+  console.log(
+    `  ✓ ${teamScopedNodes.length} assigned ${teamKeys.join("/")} projects ` +
+      `(lead or member, all states; ${assignedNodes.length} assigned overall)`
+  );
+  const assignedProjects = teamScopedNodes
+    .map(toAssignedProjectRecord)
+    .sort((a, b) => a.Name.localeCompare(b.Name));
+
   const tasks = issues.map((node) => toTaskRecord(node, weeks));
   // Dated first (soonest due at top), then undated; Identifier breaks ties.
   tasks.sort((a, b) => {
@@ -212,10 +260,19 @@ async function main() {
   if (DRY_RUN) {
     const sync = await syncLinearTasks(tasks, { dryRun: true });
     console.log(
-      `\n[dry-run] plan: ${sync.created} create, ${sync.updated} update, ` +
+      `\n[dry-run] tasks plan: ${sync.created} create, ${sync.updated} update, ` +
         `${sync.gone} gone, ${sync.unchanged} unchanged`
     );
     for (const action of sync.actions) console.log(`  ${action}`);
+    const projectSync = await syncLinearProjects(assignedProjects, {
+      dryRun: true,
+    });
+    console.log(
+      `\n[dry-run] projects plan: ${projectSync.created} create, ` +
+        `${projectSync.updated} update, ${projectSync.gone} gone, ` +
+        `${projectSync.unchanged} unchanged`
+    );
+    for (const action of projectSync.actions) console.log(`  ${action}`);
     console.log("\n[dry-run] nothing written (no caches, no Notion, no heartbeat)");
     return;
   }
@@ -272,10 +329,18 @@ async function main() {
       `${sync.gone} marked gone, ${sync.unchanged} unchanged)`
   );
 
+  const projectSync = await syncLinearProjects(assignedProjects);
+  console.log(
+    `✅ Notion 2026 Projects synced (${projectSync.created} created, ` +
+      `${projectSync.updated} updated, ${projectSync.gone} marked gone, ` +
+      `${projectSync.unchanged} unchanged)`
+  );
+
   pingHeartbeat(
     "ok",
-    `${projects.length} projects, ${tasks.length} issues, notion ` +
-      `+${sync.created}/~${sync.updated}/gone ${sync.gone}`
+    `${projects.length} projects, ${tasks.length} issues, notion tasks ` +
+      `+${sync.created}/~${sync.updated}/gone ${sync.gone}, notion projects ` +
+      `+${projectSync.created}/~${projectSync.updated}/gone ${projectSync.gone}`
   );
 }
 

@@ -126,6 +126,52 @@ class LinearService {
   }
 
   /**
+   * Projects the given user leads or is a member of — any state, any team.
+   * Feeds the Notion 2026 Projects upsert (the caller scopes to the
+   * configured teams; a Linear project has a teams *list*, so that check
+   * is client-side). Deliberately unfiltered by state so backlog and
+   * completed projects land too (Gone then means only archived-or-removed).
+   * Slim node: only the fields the Notion leg writes, plus team keys.
+   */
+  async getAssignedProjects(userId) {
+    const filter = {
+      or: [
+        { lead: { id: { eq: userId } } },
+        { members: { some: { id: { eq: userId } } } },
+      ],
+    };
+
+    const nodes = [];
+    let after = null;
+
+    do {
+      const data = await this.graphql(
+        `query AssignedProjects($filter: ProjectFilter!, $first: Int!, $after: String) {
+          projects(first: $first, after: $after, filter: $filter) {
+            nodes {
+              id
+              name
+              url
+              state
+              priorityLabel
+              startDate
+              targetDate
+              teams(first: 10) { nodes { key } }
+            }
+            pageInfo { hasNextPage endCursor }
+          }
+        }`,
+        { filter, first: PAGE_SIZE, after }
+      );
+      const page = data.projects;
+      nodes.push(...page.nodes);
+      after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+    } while (after);
+
+    return nodes;
+  }
+
+  /**
    * Issues assigned to the authenticated user, any team, every state.
    * Completed and canceled issues only within the given cutoff window (ISO
    * datetime) — older ones fall out of the cache. Canceled issues are kept
