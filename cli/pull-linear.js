@@ -3,39 +3,28 @@
 /**
  * Pull Linear CLI
  *
- * Caches Linear work state as local JSON so sessions (plan:bundle, retros,
- * fill-tasks skills) never need a live Linear call:
+ * The Linear → Notion collector, and nothing else: upserts assigned
+ * issues into the shared 2026 Tasks DB and assigned projects (lead or
+ * member, any state, on the LINEAR_PROJECT_TEAM_KEYS teams) into the
+ * shared 2026 Projects DB, so Notion is the one holistic layer for
+ * phone-side retro/planning.
  *
- *   data/workProjects.json — every project in the configured teams
- *     (LINEAR_PROJECT_TEAM_KEYS) in started/planned states. No relevance
- *     filter — the `role` field (lead/member/null) moves that judgment to
- *     session-time, and `updatedAt` lets sessions flag stale projects.
- *
- *   data/workTasks.json — issues assigned to the authenticated user, any
- *     team, every state. Completed and canceled issues kept 21 days back.
- *     Columns mirror Notion 2026 Tasks where a true equivalent exists
- *     (Task, Status, Due Date, Priority, Week Number); Status speaks
- *     Linear's native vocabulary, verbatim-from-source, with State Type
- *     alongside for type-based mapping.
- *
- * Also the Linear → Notion collector: upserts assigned issues into the
- * shared 2026 Tasks DB and assigned projects (lead or member, any state,
- * on the LINEAR_PROJECT_TEAM_KEYS teams) into the shared 2026 Projects
- * DB, so Notion is the one holistic layer for phone-side retro/planning.
+ * Writes no local JSON — local work state derives from Notion via
+ * `yarn pull` (both DBs land in data/life.json), same as every other
+ * source. Sessions (plan:bundle, retros, fill-tasks skills) read that.
  *
  * Deliberately separate from `yarn pull` / `yarn sync`: a Linear failure
  * must not stale the Notion/Calendar caches. Own launchd job
  * (com.brickomations.pull-linear), own heartbeat ping.
  *
- * Fail loud, never partial: both files are written only after every fetch
- * has succeeded; any error leaves the existing caches untouched, pings
- * the heartbeat as failed, and exits 1.
+ * Fail loud, never partial: the Notion sync runs only after every fetch
+ * has succeeded; any error pings the heartbeat as failed and exits 1.
  *
  * Usage: yarn pull:linear [--dry-run]
  *
  * --dry-run reads Linear and Notion, prints the would-be Notion actions
- * (creates/updates/gone), and writes nothing — no JSON caches, no Notion
- * writes, no heartbeat ping.
+ * (creates/updates/gone), and writes nothing — no Notion writes, no
+ * heartbeat ping.
  *
  * @layer 1 - Integration (CLI)
  */
@@ -49,7 +38,7 @@ const { syncLinearTasks } = require("../src/workflows/linear-to-notion-tasks");
 const {
   syncLinearProjects,
 } = require("../src/workflows/linear-to-notion-projects");
-const { readFileSyncRetry, writeFileSyncRetry } = require("../src/utils/fs-retry");
+const { readFileSyncRetry } = require("../src/utils/fs-retry");
 
 const REPO_ROOT = path.join(__dirname, "..");
 const DATA_DIR = path.join(REPO_ROOT, "data");
@@ -57,7 +46,6 @@ const HEARTBEAT_SCRIPT = path.join(REPO_ROOT, "scripts", "heartbeat-ping.sh");
 const JOB_NAME = "pull-linear";
 const DRY_RUN = process.argv.includes("--dry-run");
 
-const PROJECT_STATES = ["started", "planned"];
 const COMPLETED_WINDOW_DAYS = 21;
 // Bounded runtime: the per-job wakelock lasts as long as the process, so a
 // hung API call must not hold the mini awake. A handful of GraphQL pages
@@ -109,37 +97,10 @@ function weekNumberFor(dueDate, weeks) {
 
 // --- Record shaping ---
 
-function toProjectRecord(node, teamKey, viewerId) {
-  const memberIds = (node.members?.nodes || []).map((m) => m.id);
-  let role = null;
-  if (node.lead && node.lead.id === viewerId) role = "lead";
-  else if (memberIds.includes(viewerId)) role = "member";
-
-  return {
-    id: node.id,
-    name: node.name,
-    url: node.url,
-    lead: node.lead ? node.lead.name : null,
-    role,
-    status: node.status ? node.status.name : null,
-    state: node.state,
-    priority: node.priorityLabel === "No priority" ? "" : node.priorityLabel,
-    labels: (node.labels?.nodes || []).map((l) => l.name),
-    team: teamKey,
-    startDate: node.startDate || null,
-    targetDate: node.targetDate || null,
-    startedAt: node.startedAt || null,
-    updatedAt: node.updatedAt || null,
-    summary: node.description || "",
-  };
-}
-
 /**
- * Slim record for the Notion 2026 Projects upsert — distinct from
- * toProjectRecord (the workProjects.json cache shape): different fetch
- * (assigned-to-me + configured teams, all states vs. team +
- * started/planned) and only the fields the sync writes. Linear ID is the
- * project UUID — projects have no DSGN-123-style identifier.
+ * Slim record for the Notion 2026 Projects upsert — only the fields the
+ * sync writes. Linear ID is the project UUID — projects have no
+ * DSGN-123-style identifier.
  */
 function toAssignedProjectRecord(node) {
   return {
@@ -199,31 +160,6 @@ async function main() {
   const viewer = await linear.getViewer();
   console.log(`  ✓ authenticated as ${viewer.name}`);
 
-  const teams = await linear.getTeamsByKey(teamKeys);
-  const teamsByKey = new Map(teams.map((t) => [t.key, t]));
-  const missing = teamKeys.filter((k) => !teamsByKey.has(k));
-  if (missing.length > 0) {
-    throw new Error(`Linear team key(s) not found: ${missing.join(", ")}`);
-  }
-
-  // Iterate in configured-key order; a project on multiple pulled teams is
-  // recorded once, under the first team it appears for.
-  const projects = [];
-  const seenProjectIds = new Set();
-  for (const key of teamKeys) {
-    const team = teamsByKey.get(key);
-    const nodes = await linear.getTeamProjects(team.id, PROJECT_STATES);
-    for (const node of nodes) {
-      if (seenProjectIds.has(node.id)) continue;
-      seenProjectIds.add(node.id);
-      projects.push(toProjectRecord(node, team.key, viewer.id));
-    }
-    console.log(`  ✓ ${nodes.length} ${key} projects (${PROJECT_STATES.join(" + ")})`);
-  }
-  projects.sort(
-    (a, b) => a.team.localeCompare(b.team) || a.name.localeCompare(b.name)
-  );
-
   const completedCutoff = new Date(
     Date.now() - COMPLETED_WINDOW_DAYS * 24 * 60 * 60 * 1000
   ).toISOString();
@@ -232,11 +168,9 @@ async function main() {
     `  ✓ ${issues.length} assigned issues (completed kept ${COMPLETED_WINDOW_DAYS} days back)`
   );
 
-  // The Notion projects leg pulls by assignment (lead or member), all
-  // states, scoped to the configured teams — cross-team projects Jon is
-  // merely attached to (e.g. as a stakeholder) stay out. Independent of
-  // the started/planned-only workProjects.json fetch above, which stays
-  // unchanged until the retire-Linear-direct-caches ticket.
+  // The projects leg pulls by assignment (lead or member), all states,
+  // scoped to the configured teams — cross-team projects Jon is merely
+  // attached to (e.g. as a stakeholder) stay out.
   const assignedNodes = await linear.getAssignedProjects(viewer.id);
   const teamScopedNodes = assignedNodes.filter((node) =>
     (node.teams?.nodes || []).some((t) => teamKeys.includes(t.key))
@@ -273,56 +207,13 @@ async function main() {
         `${projectSync.unchanged} unchanged`
     );
     for (const action of projectSync.actions) console.log(`  ${action}`);
-    console.log("\n[dry-run] nothing written (no caches, no Notion, no heartbeat)");
+    console.log("\n[dry-run] nothing written (no Notion, no heartbeat)");
     return;
   }
-
-  // Every fetch succeeded — only now touch the caches (never partial).
-  const now = new Date().toISOString();
-
-  writeFileSyncRetry(
-    path.join(DATA_DIR, "workProjects.json"),
-    JSON.stringify(
-      {
-        _meta: {
-          source: "pull-linear",
-          pulledAt: now,
-          member: viewer.name,
-          teams: teamKeys,
-          states: PROJECT_STATES,
-        },
-        projects,
-      },
-      null,
-      2
-    )
-  );
-  console.log(`✅ data/workProjects.json written (${projects.length} projects)`);
-
-  writeFileSyncRetry(
-    path.join(DATA_DIR, "workTasks.json"),
-    JSON.stringify(
-      {
-        _meta: {
-          source: "pull-linear",
-          pulledAt: now,
-          assignee: viewer.name,
-          completedWindowDays: COMPLETED_WINDOW_DAYS,
-        },
-        tasks,
-      },
-      null,
-      2
-    )
-  );
-  console.log(`✅ data/workTasks.json written (${tasks.length} issues)`);
 
   // Linear → Notion: upsert issues into the shared 2026 Tasks DB so Notion
   // is the one holistic layer for phone-side retro/planning. Upsert on
   // Linear ID; absent issues marked 🫥 Gone (settled rows left alone).
-  // TODO(retire-local-linear-pull): once the ingestion is proven, the JSON
-  // caches above should derive from Notion (via vault-sync) instead of
-  // Linear directly — local must become a pure read of Notion.
   const sync = await syncLinearTasks(tasks);
   console.log(
     `✅ Notion 2026 Tasks synced (${sync.created} created, ${sync.updated} updated, ` +
@@ -338,9 +229,9 @@ async function main() {
 
   pingHeartbeat(
     "ok",
-    `${projects.length} projects, ${tasks.length} issues, notion tasks ` +
-      `+${sync.created}/~${sync.updated}/gone ${sync.gone}, notion projects ` +
-      `+${projectSync.created}/~${projectSync.updated}/gone ${projectSync.gone}`
+    `notion tasks +${sync.created}/~${sync.updated}/gone ${sync.gone}, ` +
+      `notion projects +${projectSync.created}/~${projectSync.updated}/gone ` +
+      `${projectSync.gone}`
   );
 }
 

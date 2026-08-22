@@ -15,8 +15,9 @@
     </array>
 
     <!-- Single fire at 6:30 AM — deliberately separate from `yarn sync` so a  -->
-    <!-- Linear failure can't stale the Notion/Calendar caches. Refreshes      -->
-    <!-- data/workProjects.json + data/workTasks.json for the day's sessions.  -->
+    <!-- Linear failure can't stale the Notion/Calendar caches. Upserts        -->
+    <!-- assigned issues + projects into Notion 2026 Tasks / 2026 Projects;    -->
+    <!-- local work state derives from Notion via the 7:00 `yarn sync` pull.   -->
     <!-- Clear of daily-brief (6:00) and the 7:00 sync/Cowork window.          -->
     <key>StartCalendarInterval</key>
     <dict>
