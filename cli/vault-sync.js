@@ -481,9 +481,6 @@ function syncPersonalProjects(projects, goals, { dryRun = false } = {}) {
     desired.description = record.Description
       ? `"${yamlEscape(record.Description)}"`
       : '""';
-    desired.problem = record.Problem
-      ? `"${yamlEscape(record.Problem)}"`
-      : '""';
     desired.lead = record.Lead
       ? `"[[${yamlEscape(record.Lead)}]]"`
       : '""';

@@ -44,7 +44,11 @@ function richTextToMarkdown(richText) {
 
   return richText
     .map((segment) => {
-      let text = segment.plain_text || "";
+      // API blocks carry plain_text/href; locally-built blocks
+      // (markdownToBlocks output) only have text.content / text.link.url.
+      // The fallbacks let markdown → blocks → markdown round-trip without
+      // an API write, which body change-detection relies on.
+      let text = segment.plain_text ?? segment.text?.content ?? "";
       if (!text) return "";
 
       const ann = segment.annotations || {};
@@ -56,8 +60,9 @@ function richTextToMarkdown(richText) {
       if (ann.strikethrough) text = `~~${text}~~`;
 
       // Links
-      if (segment.href) {
-        text = `[${text}](${segment.href})`;
+      const href = segment.href || segment.text?.link?.url;
+      if (href) {
+        text = `[${text}](${href})`;
       }
 
       return text;
@@ -88,10 +93,13 @@ function markdownToRichText(text) {
     if (match.index > lastIndex) {
       segments.push(...parseInlineFormatting(remaining.slice(lastIndex, match.index)));
     }
-    // The link itself
+    // The link itself. Linear wraps URLs in angle brackets
+    // ([text](<url>)) — strip them, or Notion percent-encodes the
+    // brackets into the stored URL and round-trips never converge.
+    const url = match[2].replace(/^<(.*)>$/, "$1");
     segments.push({
       type: "text",
-      text: { content: match[1], link: { url: match[2] } },
+      text: { content: match[1], link: { url } },
     });
     lastIndex = match.index + match[0].length;
   }
@@ -116,8 +124,9 @@ function parseInlineFormatting(text) {
   if (!text) return [];
 
   // For simplicity, return as plain text — Notion preserves formatting from pull,
-  // and most task content is plain text or checkboxes
-  return [{ type: "text", text: { content: text } }];
+  // and most task content is plain text or checkboxes. Chunked so a single
+  // long line can't exceed Notion's 2000-char rich_text element cap.
+  return chunkRichText(text).map((seg) => ({ type: "text", ...seg }));
 }
 
 // --- Blocks → Markdown ---
@@ -263,10 +272,14 @@ function markdownToBlocks(markdown) {
         codeLines.push(lines[i]);
         i++;
       }
+      // Chunked: a long code block easily exceeds the 2000-char element cap.
       blocks.push({
         type: "code",
         code: {
-          rich_text: [{ type: "text", text: { content: codeLines.join("\n") } }],
+          rich_text: chunkRichText(codeLines.join("\n")).map((seg) => ({
+            type: "text",
+            ...seg,
+          })),
           language,
         },
       });

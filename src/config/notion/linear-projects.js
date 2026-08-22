@@ -13,11 +13,13 @@
  *
  * Field ownership — the sync owns columns, not rows:
  *   - Sync-owned (overwritten every run): Project, Status, Date, Priority,
- *     Linear ID (the idempotency key), Linear URL.
+ *     Linear ID (the idempotency key), Linear URL, Description (Linear's
+ *     short summary metadata), the page body (Linear's project overview
+ *     doc, markdown → blocks), and the page icon (emoji by team —
+ *     🎨 PD/DSGN, 🏗️ DE).
  *   - Jon-owned (never touched): Category (set to 💼 Work on create only),
  *     Work Category (seeded from the project's teams on create only),
- *     Problem, Description, Lead, Goal/Products/Tasks relations,
- *     everything else.
+ *     Lead, Goal/Products/Tasks relations, everything else.
  *   - Rows without a Linear ID (all personal projects) are invisible to
  *     the sync.
  *
@@ -38,5 +40,6 @@ module.exports = {
     linearId: { name: "Linear ID", type: "rich_text", enabled: true },
     linearUrl: { name: "Linear URL", type: "url", enabled: true },
     category: { name: "Category", type: "select", enabled: true },
+    description: { name: "Description", type: "rich_text", enabled: true },
   },
 };

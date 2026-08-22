@@ -112,6 +112,10 @@ function toAssignedProjectRecord(node) {
     Priority: node.priorityLabel === "No priority" ? "" : node.priorityLabel,
     "Start Date": node.startDate || "",
     "Target Date": node.targetDate || "",
+    // Short summary metadata + the overview doc (markdown). Both sync-owned
+    // on the Notion side — Linear is the source of truth for work projects.
+    Description: node.description || "",
+    Content: node.content || "",
     // A Linear project belongs to a teams *list* — kept whole so the sync
     // can seed Work Category from the first mapped key.
     Teams: (node.teams?.nodes || []).map((t) => t.key),
