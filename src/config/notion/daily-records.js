@@ -1,9 +1,11 @@
 /**
- * 📋 Daily Records — one thin row per vault daily note. NOT year-scoped
- * (single DB across years), so it stays out of generate-year-config.
- * Written one-way by cli/daily-records.js (a `yarn sync` step); never edited
- * in Notion. The ⏰ 2026 Weeks relation isn't declarable in this schema
- * family — the sync script writes it through the raw client.
+ * 📋 Daily Records — one row per vault daily note; the page body mirrors the
+ * note's full markdown verbatim. NOT year-scoped (single DB across years), so
+ * it stays out of generate-year-config. Written one-way by
+ * cli/daily-records.js (a `yarn sync` step); the Notion copy is a read-only
+ * mirror — edits there get clobbered. The ⏰ 2026 Weeks relation isn't
+ * declarable in this schema family — the sync script writes it through the
+ * raw client.
  */
 module.exports = {
   database: process.env.NOTION_DAILY_RECORDS_DATABASE_ID,
