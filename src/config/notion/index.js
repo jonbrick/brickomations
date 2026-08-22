@@ -23,6 +23,7 @@ const relationships = require("./relationships");
 const years = require("./years");
 const months = require("./months");
 const weeks = require("./weeks");
+const dailyRecords = require("./daily-records");
 const rocks = require("./rocks");
 const linearTasks = require("./linear-tasks");
 const linearProjects = require("./linear-projects");
@@ -53,6 +54,7 @@ const databases = {
   years: years.database,
   months: months.database,
   weeks: weeks.database,
+  dailyRecords: dailyRecords.database,
   rocks: rocks.database,
   linearTasks: linearTasks.database,
   linearProjects: linearProjects.database,
@@ -84,6 +86,7 @@ const properties = {
   years: years.properties,
   months: months.properties,
   weeks: weeks.properties,
+  dailyRecords: dailyRecords.properties,
   rocks: rocks.properties,
   linearTasks: linearTasks.properties,
   linearProjects: linearProjects.properties,
@@ -113,6 +116,7 @@ const fieldMappings = {
   years: years.fieldMappings,
   months: months.fieldMappings,
   weeks: weeks.fieldMappings || {},
+  dailyRecords: dailyRecords.fieldMappings || {},
   rocks: rocks.fieldMappings || {},
 };
 
