@@ -207,20 +207,15 @@ function buildBundle(wk) {
   const collected = loadJson("collected.json");
   const retro = loadJson("retro.json");
 
-  // Linear caches (yarn pull:linear) may be absent until the first
-  // scheduled pull lands; not fatal.
-  let workProjects = null;
-  try {
-    workProjects = loadJson("workProjects.json");
-  } catch {
-    workProjects = null;
-  }
-  let workTasks = null;
-  try {
-    workTasks = loadJson("workTasks.json");
-  } catch {
-    workTasks = null;
-  }
+  // Work state derives from Notion: pull-linear upserts Linear projects +
+  // issues into 2026 Projects / 2026 Tasks, and yarn pull lands both DBs
+  // in life.json. Work rows carry Category "💼 Work"; personal rows don't.
+  const workProjectRows = (life.personalProjects || []).filter(
+    (p) => p.Category === "💼 Work"
+  );
+  const workTaskRows = (life.tasks || []).filter(
+    (t) => t.Category === "💼 Work"
+  );
 
   // plan.json week titles are zero-padded ("Week 08"); life.json task
   // "Week Number" values are not ("Week 8"). Different keys per file.
@@ -359,29 +354,30 @@ function buildBundle(wk) {
         .filter((g) => g.Status !== "🟢 Done")
         .map(stripKeepId),
       personalProjects: (life.personalProjects || [])
-        .filter((p) => p.Status !== "🟢 Done")
+        .filter((p) => p.Category !== "💼 Work" && p.Status !== "🟢 Done")
         .map(stripKeepId),
-      workProjects: workProjects
-        ? {
-            pulledAt: workProjects._meta
-              ? workProjects._meta.pulledAt || workProjects._meta.pulled_at
-              : null,
-            projects: workProjects.projects || [],
-          }
-        : null,
+      // Active work projects only — 🔵 Doing + 🔴 To Do, the Notion
+      // equivalent of the started/planned states the old Linear cache held.
+      workProjects: {
+        pulledAt: life._meta ? life._meta.pulledAt : null,
+        projects: workProjectRows
+          .filter((p) => p.Status === "🔵 Doing" || p.Status === "🔴 To Do")
+          .map(stripKeepId),
+      },
       // The week's Linear tickets: due in span (done ones included, so the
-      // plan doesn't double-book) plus open undated. A non-empty
-      // "Completed At" means done — Status names are team-customizable.
-      workTickets: workTasks
-        ? {
-            pulledAt: workTasks._meta ? workTasks._meta.pulledAt : null,
-            tickets: (workTasks.tasks || []).filter(
-              (t) =>
-                inRange(t["Due Date"], start, end) ||
-                (!t["Due Date"] && !t["Completed At"])
-            ),
-          }
-        : null,
+      // plan doesn't double-book) plus undated ones still open — i.e. not
+      // settled (🟢 Done / 🛑 Canceled) or dropped from Linear (🫥 Gone).
+      workTickets: {
+        pulledAt: life._meta ? life._meta.pulledAt : null,
+        tickets: workTaskRows
+          .filter(
+            (t) =>
+              inRange(t["Due Date"], start, end) ||
+              (!t["Due Date"] &&
+                !["🟢 Done", "🛑 Canceled", "🫥 Gone"].includes(t.Status))
+          )
+          .map(stripKeepId),
+      },
       monthPlans: {
         personal: strip(findMonthPlan(life.personalMonthlyPlans)),
         work: strip(findMonthPlan(life.workMonthlyPlans)),
