@@ -132,6 +132,9 @@ class LinearService {
    * is client-side). Deliberately unfiltered by state so backlog and
    * completed projects land too (Gone then means only archived-or-removed).
    * Slim node: only the fields the Notion leg writes, plus team keys.
+   * description is the short summary metadata line; content is the project
+   * overview document as markdown — both land in Notion (Description
+   * property / page body).
    */
   async getAssignedProjects(userId) {
     const filter = {
@@ -152,6 +155,8 @@ class LinearService {
               id
               name
               url
+              description
+              content
               state
               priorityLabel
               startDate

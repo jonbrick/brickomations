@@ -5,11 +5,16 @@
 //
 // Field ownership — the sync owns columns, not rows:
 //   - Sync-owned, overwritten every run: Project (title, verbatim from
-//     Linear), Status, Date, Priority, Linear ID, Linear URL. Editing
-//     these in Notion gets reverted next run — that edit belongs in Linear.
+//     Linear), Status, Date, Priority, Linear ID, Linear URL, Description
+//     (Linear's short summary metadata), the page BODY (Linear's project
+//     overview doc, converted markdown → blocks), and the page ICON
+//     (emoji by team — 🎨 PD/DSGN, 🏗️ DE; projects only, tasks get none).
+//     Editing these in Notion gets reverted next run — that edit belongs
+//     in Linear. A Linear project with no overview doc means an empty
+//     Notion body; one with no mapped team keeps whatever icon it has.
 //   - Jon-owned, never touched: Category (set to 💼 Work on create only),
 //     Work Category (seeded from the project's teams on create only —
-//     DSGN → 🎨 Design, DE → 🖥️ Coding), Problem, Description, Lead,
+//     DSGN → 🎨 Design, DE → 🖥️ Coding), Lead,
 //     Goal/Products/Tasks relations, everything else.
 //   - Rows without a Linear ID (all personal projects) are invisible to
 //     the sync.
@@ -29,6 +34,11 @@
 const NotionDatabase = require("../databases/NotionDatabase");
 const config = require("../config");
 const { delay } = require("../utils/async");
+const {
+  markdownToBlocks,
+  blocksToMarkdown,
+  chunkRichText,
+} = require("../utils/notion-content");
 
 const CONFIG_KEY = "linearProjects";
 const GONE_STATUS = "🫥 Gone";
@@ -68,6 +78,19 @@ function workCategoryFor(project) {
   return key ? CREATE_ONLY_WORK_CATEGORY_BY_TEAM[key] : null;
 }
 
+// Page icon by team — sync-owned, unlike Work Category: a hand-changed
+// icon gets reverted next run. Cross-team projects: first mapped key wins.
+// Unmapped teams get "" and the icon is left alone.
+const ICON_BY_TEAM = {
+  DSGN: "🎨",
+  DE: "🏗️",
+};
+
+function iconFor(project) {
+  const key = (project.Teams || []).find((k) => ICON_BY_TEAM[k]);
+  return key ? ICON_BY_TEAM[key] : "";
+}
+
 /**
  * Plain string values for change detection. Date is compared as a
  * start/end pair; end is "" when the project window is a single date.
@@ -88,7 +111,42 @@ function syncedValues(project) {
     Priority: PRIORITY_MAP[project.Priority] || "",
     "Linear ID": project.Id,
     "Linear URL": project.URL,
+    Description: project.Description || "",
   };
+}
+
+/**
+ * Linear overview markdown normalized to what the Notion page reads back
+ * as after our own write: markdown → blocks → markdown. Comparing raw
+ * Linear markdown against the page would rewrite bodies every run — the
+ * conversion is lossy on constructs Notion blocks don't model 1:1, so
+ * only the round-tripped form is stable.
+ */
+function normalizedBody(markdown) {
+  return blocksToMarkdown(markdownToBlocks(markdown || "")).trim();
+}
+
+/**
+ * Notion canonicalizes link URLs it stores — notion.so links lose their
+ * query string, and + in query strings is re-encoded as %20 — so raw
+ * markdown compares never converge on pages containing such links.
+ * Canonicalize both sides the same way (drop notion-domain queries,
+ * percent-decode with + as space) before comparing. Compare-only: the
+ * blocks actually written keep Linear's URLs verbatim.
+ */
+function canonicalizeLinksForCompare(markdown) {
+  return markdown.replace(/\]\(([^)]+)\)/g, (_m, url) => {
+    let u = url;
+    if (/https?:\/\/([^/]*\.)?(notion\.(so|site)|app\.notion\.com)\//.test(u)) {
+      u = u.split("?")[0];
+    }
+    try {
+      u = decodeURIComponent(u.replace(/\+/g, "%20"));
+    } catch {
+      // undecodable escapes: compare the URL as-is
+    }
+    return `](${u})`;
+  });
 }
 
 /** The page's current sync-owned values, shaped exactly like syncedValues. */
@@ -104,6 +162,7 @@ function currentValues(db, page) {
     Priority: db.extractProperty(page, "Priority") || "",
     "Linear ID": db.extractProperty(page, "Linear ID") || "",
     "Linear URL": db.extractProperty(page, "Linear URL") || "",
+    Description: db.extractProperty(page, "Description") || "",
   };
 }
 
@@ -125,6 +184,7 @@ function toPayload(values) {
     Priority: { select: values.Priority ? { name: values.Priority } : null },
     "Linear ID": { rich_text: [{ text: { content: values["Linear ID"] } }] },
     "Linear URL": { url: values["Linear URL"] },
+    Description: { rich_text: chunkRichText(values.Description) },
   };
 }
 
@@ -172,6 +232,9 @@ async function syncLinearProjects(projects, opts = {}) {
     pulledIds.add(project.Id);
 
     const values = syncedValues(project);
+    const desiredBlocks = markdownToBlocks(project.Content || "");
+    const desiredBody = normalizedBody(project.Content);
+    const desiredIcon = iconFor(project);
     const page = pagesByLinearId.get(project.Id);
 
     if (!page) {
@@ -179,7 +242,7 @@ async function syncLinearProjects(projects, opts = {}) {
       counts.created++;
       if (dryRun) continue;
       const workCategory = workCategoryFor(project);
-      await db.createPage(
+      const created = await db.createPage(
         databaseId,
         {
           ...toPayload(values),
@@ -191,19 +254,55 @@ async function syncLinearProjects(projects, opts = {}) {
         [],
         CONFIG_KEY
       );
+      if (desiredIcon) {
+        await delay(backoffMs);
+        await db.setPageIcon(created.id, desiredIcon);
+      }
+      // Body via replacePageContent, not createPage children — the create
+      // endpoint caps children at 100 blocks; replace appends in batches.
+      if (desiredBlocks.length > 0) {
+        await delay(backoffMs);
+        await db.replacePageContent(created.id, desiredBlocks);
+      }
       await delay(backoffMs);
     } else {
       const current = currentValues(db, page);
-      const changes = changedFields(current, values);
-      if (changes.length === 0) {
+      const propChanges = changedFields(current, values);
+      const currentIcon = page.icon?.type === "emoji" ? page.icon.emoji : "";
+      const iconChanged = Boolean(desiredIcon) && desiredIcon !== currentIcon;
+      // Body compare costs one block-list read per row per run (nested
+      // fetches never trigger: sync-written bodies are flat).
+      const currentBody = blocksToMarkdown(
+        await db.getPageBlocks(page.id)
+      ).trim();
+      await delay(backoffMs);
+      const bodyChanged =
+        canonicalizeLinksForCompare(currentBody) !==
+        canonicalizeLinksForCompare(desiredBody);
+      if (propChanges.length === 0 && !bodyChanged && !iconChanged) {
         counts.unchanged++;
         continue;
       }
+      const changes = [...propChanges];
+      if (iconChanged) {
+        changes.push(`Icon: ${currentIcon || "(none)"} → ${desiredIcon}`);
+      }
+      if (bodyChanged) changes.push("Body: rewritten from Linear");
       counts.actions.push(`~ update ${values.Project} (${changes.join("; ")})`);
       counts.updated++;
       if (dryRun) continue;
-      await db.updatePage(page.id, toPayload(values), CONFIG_KEY);
-      await delay(backoffMs);
+      if (propChanges.length > 0) {
+        await db.updatePage(page.id, toPayload(values), CONFIG_KEY);
+        await delay(backoffMs);
+      }
+      if (iconChanged) {
+        await db.setPageIcon(page.id, desiredIcon);
+        await delay(backoffMs);
+      }
+      if (bodyChanged) {
+        await db.replacePageContent(page.id, desiredBlocks);
+        await delay(backoffMs);
+      }
     }
   }
 

@@ -136,6 +136,24 @@ class NotionDatabase {
   }
 
   /**
+   * Set a page's icon to an emoji.
+   *
+   * @param {string} pageId - Page ID
+   * @param {string} emoji - Emoji character
+   * @returns {Promise<Object>} Updated page
+   */
+  async setPageIcon(pageId, emoji) {
+    try {
+      return await this.client.pages.update({
+        page_id: pageId,
+        icon: { type: "emoji", emoji },
+      });
+    } catch (error) {
+      throw new Error(`Failed to set page icon: ${error.message}`);
+    }
+  }
+
+  /**
    * Retrieve a page by ID
    *
    * @param {string} pageId - Page ID
