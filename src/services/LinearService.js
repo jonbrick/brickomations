@@ -127,9 +127,11 @@ class LinearService {
 
   /**
    * Projects the given user leads or is a member of — any state, any team.
-   * Feeds the Notion 2026 Projects upsert; deliberately unfiltered by state
-   * so backlog and completed projects land too (Gone then means only
-   * archived-or-removed). Slim node: only the fields the Notion leg writes.
+   * Feeds the Notion 2026 Projects upsert (the caller scopes to the
+   * configured teams; a Linear project has a teams *list*, so that check
+   * is client-side). Deliberately unfiltered by state so backlog and
+   * completed projects land too (Gone then means only archived-or-removed).
+   * Slim node: only the fields the Notion leg writes, plus team keys.
    */
   async getAssignedProjects(userId) {
     const filter = {
@@ -154,6 +156,7 @@ class LinearService {
               priorityLabel
               startDate
               targetDate
+              teams(first: 10) { nodes { key } }
             }
             pageInfo { hasNextPage endCursor }
           }

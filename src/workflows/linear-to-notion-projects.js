@@ -8,8 +8,9 @@
 //     Linear), Status, Date, Priority, Linear ID, Linear URL. Editing
 //     these in Notion gets reverted next run — that edit belongs in Linear.
 //   - Jon-owned, never touched: Category (set to 💼 Work on create only),
-//     Work Category, Problem, Description, Lead, Goal/Products/Tasks
-//     relations, everything else.
+//     Work Category (seeded from the project's teams on create only —
+//     DSGN → 🎨 Design, DE → 🖥️ Coding), Problem, Description, Lead,
+//     Goal/Products/Tasks relations, everything else.
 //   - Rows without a Linear ID (all personal projects) are invisible to
 //     the sync.
 //
@@ -51,6 +52,21 @@ const SETTLED_STATUSES = new Set(["🟢 Done", "❌ Canceled", GONE_STATUS]);
 const PRIORITY_MAP = { Urgent: "Urgent", High: "High", Medium: "Medium", Low: "Low" };
 
 const CREATE_ONLY_CATEGORY = "💼 Work";
+
+// Work Category is Jon-owned like Category: seeded from the project's
+// teams on create only, never overwritten. A project can be on several
+// teams — first mapped key wins. Unmapped teams get no seed.
+const CREATE_ONLY_WORK_CATEGORY_BY_TEAM = {
+  DSGN: "🎨 Design",
+  DE: "🖥️ Coding",
+};
+
+function workCategoryFor(project) {
+  const key = (project.Teams || []).find(
+    (k) => CREATE_ONLY_WORK_CATEGORY_BY_TEAM[k]
+  );
+  return key ? CREATE_ONLY_WORK_CATEGORY_BY_TEAM[key] : null;
+}
 
 /**
  * Plain string values for change detection. Date is compared as a
@@ -162,11 +178,15 @@ async function syncLinearProjects(projects, opts = {}) {
       counts.actions.push(`+ create [${values.Status}] ${values.Project}`);
       counts.created++;
       if (dryRun) continue;
+      const workCategory = workCategoryFor(project);
       await db.createPage(
         databaseId,
         {
           ...toPayload(values),
           Category: { select: { name: CREATE_ONLY_CATEGORY } },
+          ...(workCategory
+            ? { "Work Category": { select: { name: workCategory } } }
+            : {}),
         },
         [],
         CONFIG_KEY

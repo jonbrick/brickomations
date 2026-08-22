@@ -20,8 +20,8 @@
  *
  * Also the Linear → Notion collector: upserts assigned issues into the
  * shared 2026 Tasks DB and assigned projects (lead or member, any state,
- * any team) into the shared 2026 Projects DB, so Notion is the one
- * holistic layer for phone-side retro/planning.
+ * on the LINEAR_PROJECT_TEAM_KEYS teams) into the shared 2026 Projects
+ * DB, so Notion is the one holistic layer for phone-side retro/planning.
  *
  * Deliberately separate from `yarn pull` / `yarn sync`: a Linear failure
  * must not stale the Notion/Calendar caches. Own launchd job
@@ -137,9 +137,9 @@ function toProjectRecord(node, teamKey, viewerId) {
 /**
  * Slim record for the Notion 2026 Projects upsert — distinct from
  * toProjectRecord (the workProjects.json cache shape): different fetch
- * (assigned-to-me, all states vs. team + started/planned) and only the
- * fields the sync writes. Linear ID is the project UUID — projects have
- * no DSGN-123-style identifier.
+ * (assigned-to-me + configured teams, all states vs. team +
+ * started/planned) and only the fields the sync writes. Linear ID is the
+ * project UUID — projects have no DSGN-123-style identifier.
  */
 function toAssignedProjectRecord(node) {
   return {
@@ -151,6 +151,9 @@ function toAssignedProjectRecord(node) {
     Priority: node.priorityLabel === "No priority" ? "" : node.priorityLabel,
     "Start Date": node.startDate || "",
     "Target Date": node.targetDate || "",
+    // A Linear project belongs to a teams *list* — kept whole so the sync
+    // can seed Work Category from the first mapped key.
+    Teams: (node.teams?.nodes || []).map((t) => t.key),
   };
 }
 
@@ -230,13 +233,19 @@ async function main() {
   );
 
   // The Notion projects leg pulls by assignment (lead or member), all
-  // states — independent of the team-scoped workProjects.json fetch above,
-  // which stays unchanged until the retire-Linear-direct-caches ticket.
+  // states, scoped to the configured teams — cross-team projects Jon is
+  // merely attached to (e.g. as a stakeholder) stay out. Independent of
+  // the started/planned-only workProjects.json fetch above, which stays
+  // unchanged until the retire-Linear-direct-caches ticket.
   const assignedNodes = await linear.getAssignedProjects(viewer.id);
-  console.log(
-    `  ✓ ${assignedNodes.length} assigned projects (lead or member, all states)`
+  const teamScopedNodes = assignedNodes.filter((node) =>
+    (node.teams?.nodes || []).some((t) => teamKeys.includes(t.key))
   );
-  const assignedProjects = assignedNodes
+  console.log(
+    `  ✓ ${teamScopedNodes.length} assigned ${teamKeys.join("/")} projects ` +
+      `(lead or member, all states; ${assignedNodes.length} assigned overall)`
+  );
+  const assignedProjects = teamScopedNodes
     .map(toAssignedProjectRecord)
     .sort((a, b) => a.Name.localeCompare(b.Name));
 

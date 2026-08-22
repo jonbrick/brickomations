@@ -15,8 +15,9 @@
  *   - Sync-owned (overwritten every run): Project, Status, Date, Priority,
  *     Linear ID (the idempotency key), Linear URL.
  *   - Jon-owned (never touched): Category (set to 💼 Work on create only),
- *     Work Category, Problem, Description, Lead, Goal/Products/Tasks
- *     relations, everything else.
+ *     Work Category (seeded from the project's teams on create only),
+ *     Problem, Description, Lead, Goal/Products/Tasks relations,
+ *     everything else.
  *   - Rows without a Linear ID (all personal projects) are invisible to
  *     the sync.
  *
