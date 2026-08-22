@@ -76,6 +76,12 @@ const STEPS = [
   { name: "aggregate", cmd: `${NODE} cli/aggregate-month.js --auto${rangeFlag}` },
   { name: "pull", cmd: `${NODE} cli/pull.js --auto`, timeout: 8 * 60 * 1000 },
   { name: "vault-sync", cmd: `${NODE} cli/vault-sync.js --auto` },
+  // Deliberately no ${rangeFlag}: Daily Records doesn't backfill. The step's
+  // own --auto window is fixed at yesterday→tomorrow (missing notes skip), so
+  // the sync-wide 3-week window can't create rows for days whose notes only
+  // exist because they always have. Runs after `pull` so plan.json is fresh
+  // for the week relation.
+  { name: "daily-records", cmd: `${NODE} cli/daily-records.js --auto` },
 ];
 
 function log(message) {
