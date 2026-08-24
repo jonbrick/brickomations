@@ -1123,7 +1123,7 @@ const INTEGRATIONS = {
       eventType: "allDay",
       displayNameProperty: "date",
       displayNameFormat: "date",
-      skipReason: "Missing date, No meds checked, or neither AM/PM logged",
+      skipReason: "Missing date, No Meds checked, or neither AM/PM logged",
       transformerFile: "../transformers/notion-medications-to-calendar.js",
       transformerFunction: "transformMedicationToCalendarEvent",
       displayFields: [{ key: "date", property: "Date" }],

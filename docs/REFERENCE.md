@@ -362,7 +362,7 @@ When syncing Notion Events and Trips to Google Calendar, event color is set from
 
 **Locations**: `src/config/notion/medications.js` and `src/config/notion/supplements.js`
 
-Two sibling DBs synced to two sibling Google Calendars (💊 + 🍬). Medications list and ordering are defined by `MEDICATION_SHORT_NAMES` in `medications.js`; iteration order = title display order. Each med checkbox must have matching entries in `properties` and `fieldMappings`; Notion checkbox column names must match `properties[].name`. The medications DB also carries a free-text `Other` field for ad-hoc meds. Supplements is a single-checkbox DB. See [Internals – Medications and Supplements calendar event format](INTERNALS.md#medications-and-supplements-calendar-event-format) for description/summary behavior.
+Two sibling DBs synced to two sibling Google Calendars (💊 + 🍬). The medications DB holds each day's regimen as relations to the 💊 Medications List DB (`AM Medication` / `PM Medication`); the `AM Medication List` / `PM Medication List` formula properties expose the related names as comma-separated strings, which is what the transformer reads. Regimen changes (new Rx, dose change) are pure Notion data — no code change. Supplements still tracks via multi-selects (see `supplements.js`). See [Internals – Medications and Supplements calendar event format](INTERNALS.md#medications-and-supplements-calendar-event-format) for description/summary behavior.
 
 ### SUMMARY_GROUPS Registry
 
