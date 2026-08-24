@@ -256,14 +256,15 @@ function autoDiscoverCollectors() {
 
 #### Medications
 
-- **`MEDICATION_SHORT_NAMES`** – Ordered map `{ <propertyKey>: <truncatedName> }`. Iteration order = display order in the calendar event title. Adding or reordering meds: edit this constant **and** add a matching entry in `properties` + `fieldMappings`, then add the matching checkbox column in Notion.
-- **`properties.other`** – Free-text rich_text field for ad-hoc meds (NyQuil, Tylenol, etc.) that don't earn a dedicated checkbox.
+- **Per-day regimen via relations** – Each day row relates to the 💊 Medications List DB through `AM Medication` / `PM Medication`. The `AM Medication List` / `PM Medication List` **formula** properties render those relations as comma-separated name strings (`"Gabapentin, Sertraline"`) — the transformer reads the formulas, so it never resolves relation IDs to titles.
+- **Checkboxes** – `AM Meds` / `PM Meds` mark which batch was taken; `No Meds` overrides everything. A partially-skipped batch is recorded by removing the med from that day's relation, so the day's list always reflects what was actually taken.
+- **Regimen changes are pure data** – New Rx, dose change, or a temporary course means editing the Medications List DB and the day relations in Notion. No code change.
 
 **Calendar event behavior:**
 
-- **Summary**: `💊 <comma list>` — short names of checked checkboxes (in `MEDICATION_SHORT_NAMES` order) followed by the `Other` text verbatim. Examples: `💊 Gaba, Sertra` / `💊 Gaba, Sertra, Nyquil` / `💊 Tylenol, Mucinex`.
-- **Description**: One `✅`/`❌` line per checkbox using the full Notion label, then `Other: <text>` on a new line if `Other` is non-empty.
-- **Skip**: No event when `No meds` is checked, the date is missing, or no checkbox is checked and `Other` is empty.
+- **Summary**: `💊 Medications (AM)` / `💊 Medications (PM)` / `💊 Medications (AM + PM)` — reflects which batches were taken.
+- **Description**: One line per taken batch, e.g. `AM: ✅ Gabapentin, ✅ Sertraline`.
+- **Skip**: No event when `No Meds` is checked, the date is missing, or neither batch checkbox is checked.
 
 #### Supplements
 
