@@ -3,9 +3,9 @@
 // phone reads it natively with no MCP/API call). No separate mirror DB.
 //
 // Field ownership — the sync owns columns, not rows:
-//   - Sync-owned, overwritten every run: Task, Status, Due Date, Priority,
-//     Linear ID, Linear URL. Editing these in Notion gets reverted next
-//     run — that edit belongs in Linear.
+//   - Sync-owned, overwritten every run: Task, Status, Due Date, Linear Date,
+//     Priority, Linear ID, Linear URL. Editing these in Notion gets reverted
+//     next run — that edit belongs in Linear.
 //   - Jon-owned, never touched: Category (set to 💼 Work on create only),
 //     WORK Category (seeded from the Linear team on create only — DSGN →
 //     🎨 Design, DE → 🖥️ Coding), Notes, relations, everything else. Week Number is a
@@ -56,21 +56,12 @@ const CREATE_ONLY_WORK_CATEGORY_BY_TEAM = {
   DE: "🖥️ Coding",
 };
 
-// Linear stamps completedAt/canceledAt in UTC — a late-evening close in NYC
-// would otherwise land on the next calendar day (and the wrong week).
+// Linear stamps completedAt in UTC — a late-evening close in NYC would
+// otherwise land on the next calendar day (and the wrong week).
 function nyDateOf(isoTimestamp) {
   return new Date(isoTimestamp).toLocaleDateString("en-CA", {
     timeZone: "America/New_York",
   });
-}
-
-// Settled issues rarely carry a Linear due date, but a dateless 🟢 Done /
-// 🛑 Canceled row never lands in any week of the Notion record — fall back
-// to the day the issue was closed.
-function effectiveDueDate(task) {
-  if (task["Due Date"]) return task["Due Date"];
-  const settledAt = task["Completed At"] || task["Canceled At"];
-  return settledAt ? nyDateOf(settledAt) : "";
 }
 
 /** Plain string values for change detection (compared via extractProperty). */
@@ -78,7 +69,9 @@ function syncedValues(task) {
   return {
     Task: task.Task,
     Status: STATUS_BY_STATE_TYPE[task["State Type"]] || "🔴 To Do",
-    "Due Date": effectiveDueDate(task),
+    "Due Date": task["Due Date"] || "",
+    // Linear's model: the day the issue was marked complete, empty until then.
+    "Linear Date": task["Completed At"] ? nyDateOf(task["Completed At"]) : "",
     Priority: PRIORITY_MAP[task.Priority] || "",
     "Linear ID": task.Identifier,
     "Linear URL": task.URL,
@@ -93,6 +86,9 @@ function toPayload(values) {
     Task: { title: [{ text: { content: values.Task } }] },
     Status: { status: { name: values.Status } },
     "Due Date": { date: values["Due Date"] ? { start: values["Due Date"] } : null },
+    "Linear Date": {
+      date: values["Linear Date"] ? { start: values["Linear Date"] } : null,
+    },
     Priority: { select: values.Priority ? { name: values.Priority } : null },
     "Linear ID": { rich_text: [{ text: { content: values["Linear ID"] } }] },
     "Linear URL": { url: values["Linear URL"] },

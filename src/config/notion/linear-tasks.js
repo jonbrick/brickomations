@@ -6,8 +6,8 @@
  * local) so work state is readable on the phone without MCP or API calls.
  *
  * Field ownership — in a shared DB the sync owns columns, not rows:
- *   - Sync-owned (overwritten every run): Task, Status, Due Date, Priority,
- *     Linear ID (the idempotency key), Linear URL.
+ *   - Sync-owned (overwritten every run): Task, Status, Due Date, Linear Date,
+ *     Priority, Linear ID (the idempotency key), Linear URL.
  *   - Jon-owned (never touched): Category (set to 💼 Work on create only),
  *     WORK Category, Notes, Projects/Goals/Rocks relations, everything else.
  *   - Rows without a Linear ID (the flexible 20%) are invisible to the sync.
@@ -24,6 +24,7 @@ module.exports = {
     task: { name: "Task", type: "title", enabled: true },
     status: { name: "Status", type: "status", enabled: true },
     dueDate: { name: "Due Date", type: "date", enabled: true },
+    linearDate: { name: "Linear Date", type: "date", enabled: true },
     priority: { name: "Priority", type: "select", enabled: true },
     linearId: { name: "Linear ID", type: "rich_text", enabled: true },
     linearUrl: { name: "Linear URL", type: "url", enabled: true },
