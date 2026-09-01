@@ -202,6 +202,7 @@ class LinearService {
               nodes {
                 identifier
                 title
+                description
                 url
                 dueDate
                 priorityLabel

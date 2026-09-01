@@ -136,6 +136,8 @@ function toTaskRecord(node, weeks) {
     Assignee: node.assignee ? node.assignee.name : "",
     Identifier: node.identifier,
     URL: node.url,
+    // Issue description (markdown) — becomes the Notion page body.
+    Content: node.description || "",
     Project: node.project ? node.project.name : "",
     Team: node.team ? node.team.key : "",
     "Completed At": node.completedAt || "",

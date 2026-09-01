@@ -4,8 +4,15 @@
 //
 // Field ownership — the sync owns columns, not rows:
 //   - Sync-owned, overwritten every run: Task, Status, Due Date, Linear Date,
-//     Priority, Linear ID, Linear URL. Editing these in Notion gets reverted
-//     next run — that edit belongs in Linear.
+//     Priority, Linear ID, Linear URL, and the page BODY (the Linear issue
+//     description, converted markdown → blocks). Editing these in Notion gets
+//     reverted next run — that edit belongs in Linear. Notes stays the
+//     Jon-owned free-text field.
+//   - Body details: Linear-hosted images are auth-gated and would render
+//     broken in Notion, so each image becomes an inline placeholder link
+//     back to the issue (🖼️ image — view in Linear). Settled rows
+//     (🟢 Done / 🛑 Canceled) skip the body compare — one block-list read
+//     per row per run is only paid for active tasks.
 //   - Jon-owned, never touched: Category (set to 💼 Work on create only),
 //     WORK Category (seeded from the Linear team on create only — DSGN →
 //     🎨 Design, DE → 🖥️ Coding), Notes, relations, everything else. Week Number is a
@@ -26,6 +33,12 @@
 const NotionDatabase = require("../databases/NotionDatabase");
 const config = require("../config");
 const { delay } = require("../utils/async");
+const {
+  markdownToBlocks,
+  blocksToMarkdown,
+  normalizedBody,
+  canonicalizeLinksForCompare,
+} = require("../utils/notion-content");
 
 const CONFIG_KEY = "linearTasks";
 const GONE_STATUS = "🫥 Gone";
@@ -55,6 +68,20 @@ const CREATE_ONLY_WORK_CATEGORY_BY_TEAM = {
   DSGN: "🎨 Design",
   DE: "🖥️ Coding",
 };
+
+/**
+ * Replace every markdown image with an inline placeholder link back to the
+ * issue. Linear-hosted images (uploads.linear.app) are auth-gated — a Notion
+ * image block pointing at one renders broken — and markdownToBlocks has no
+ * image handling anyway. A link round-trips losslessly through
+ * markdown → blocks → markdown, so change detection stays stable.
+ */
+function imagesToPlaceholders(markdown, issueUrl) {
+  return (markdown || "").replace(
+    /!\[[^\]]*\]\([^)]*\)/g,
+    `[🖼️ image — view in Linear](${issueUrl})`
+  );
+}
 
 // Linear stamps completedAt in UTC — a late-evening close in NYC would
 // otherwise land on the next calendar day (and the wrong week).
@@ -93,12 +120,6 @@ function toPayload(values) {
     "Linear ID": { rich_text: [{ text: { content: values["Linear ID"] } }] },
     "Linear URL": { url: values["Linear URL"] },
   };
-}
-
-function isChanged(db, page, values) {
-  return Object.entries(values).some(
-    ([name, value]) => (db.extractProperty(page, name) || "") !== value
-  );
 }
 
 /** Changed sync-owned fields as "Status: 🔵 Doing → 🟢 Done" fragments. */
@@ -144,6 +165,10 @@ async function syncLinearTasks(tasks, opts = {}) {
     pulledIds.add(task.Identifier);
 
     const values = syncedValues(task);
+    const bodyMarkdown = imagesToPlaceholders(task.Content, task.URL);
+    const desiredBlocks = markdownToBlocks(bodyMarkdown);
+    const desiredBody = normalizedBody(bodyMarkdown);
+    const settled = SETTLED_STATUSES.has(values.Status);
     const page = pagesByLinearId.get(task.Identifier);
 
     if (!page) {
@@ -153,7 +178,7 @@ async function syncLinearTasks(tasks, opts = {}) {
       counts.created++;
       if (dryRun) continue;
       const workCategory = CREATE_ONLY_WORK_CATEGORY_BY_TEAM[task.Team];
-      await db.createPage(
+      const created = await db.createPage(
         databaseId,
         {
           ...toPayload(values),
@@ -165,17 +190,46 @@ async function syncLinearTasks(tasks, opts = {}) {
         [],
         CONFIG_KEY
       );
+      // Body via replacePageContent, not createPage children — the create
+      // endpoint caps children at 100 blocks; replace appends in batches.
+      if (desiredBlocks.length > 0) {
+        await delay(backoffMs);
+        await db.replacePageContent(created.id, desiredBlocks);
+      }
       await delay(backoffMs);
-    } else if (isChanged(db, page, values)) {
+    } else {
+      const propChanges = changedFields(db, page, values);
+      // Body compare costs one block-list read per row per run — paid for
+      // active rows only; a settled row's body was synced while it lived.
+      let bodyChanged = false;
+      if (!settled) {
+        const currentBody = blocksToMarkdown(
+          await db.getPageBlocks(page.id)
+        ).trim();
+        await delay(backoffMs);
+        bodyChanged =
+          canonicalizeLinksForCompare(currentBody) !==
+          canonicalizeLinksForCompare(desiredBody);
+      }
+      if (propChanges.length === 0 && !bodyChanged) {
+        counts.unchanged++;
+        continue;
+      }
+      const changes = [...propChanges];
+      if (bodyChanged) changes.push("Body: rewritten from Linear");
       counts.actions.push(
-        `~ update ${task.Identifier} (${changedFields(db, page, values).join("; ")})`
+        `~ update ${task.Identifier} (${changes.join("; ")})`
       );
       counts.updated++;
       if (dryRun) continue;
-      await db.updatePage(page.id, toPayload(values), CONFIG_KEY);
-      await delay(backoffMs);
-    } else {
-      counts.unchanged++;
+      if (propChanges.length > 0) {
+        await db.updatePage(page.id, toPayload(values), CONFIG_KEY);
+        await delay(backoffMs);
+      }
+      if (bodyChanged) {
+        await db.replacePageContent(page.id, desiredBlocks);
+        await delay(backoffMs);
+      }
     }
   }
 
@@ -198,4 +252,4 @@ async function syncLinearTasks(tasks, opts = {}) {
   return counts;
 }
 
-module.exports = { syncLinearTasks };
+module.exports = { syncLinearTasks, imagesToPlaceholders };
