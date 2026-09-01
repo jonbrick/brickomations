@@ -38,6 +38,8 @@ const {
   markdownToBlocks,
   blocksToMarkdown,
   chunkRichText,
+  normalizedBody,
+  canonicalizeLinksForCompare,
 } = require("../utils/notion-content");
 
 const CONFIG_KEY = "linearProjects";
@@ -113,40 +115,6 @@ function syncedValues(project) {
     "Linear URL": project.URL,
     Description: project.Description || "",
   };
-}
-
-/**
- * Linear overview markdown normalized to what the Notion page reads back
- * as after our own write: markdown → blocks → markdown. Comparing raw
- * Linear markdown against the page would rewrite bodies every run — the
- * conversion is lossy on constructs Notion blocks don't model 1:1, so
- * only the round-tripped form is stable.
- */
-function normalizedBody(markdown) {
-  return blocksToMarkdown(markdownToBlocks(markdown || "")).trim();
-}
-
-/**
- * Notion canonicalizes link URLs it stores — notion.so links lose their
- * query string, and + in query strings is re-encoded as %20 — so raw
- * markdown compares never converge on pages containing such links.
- * Canonicalize both sides the same way (drop notion-domain queries,
- * percent-decode with + as space) before comparing. Compare-only: the
- * blocks actually written keep Linear's URLs verbatim.
- */
-function canonicalizeLinksForCompare(markdown) {
-  return markdown.replace(/\]\(([^)]+)\)/g, (_m, url) => {
-    let u = url;
-    if (/https?:\/\/([^/]*\.)?(notion\.(so|site)|app\.notion\.com)\//.test(u)) {
-      u = u.split("?")[0];
-    }
-    try {
-      u = decodeURIComponent(u.replace(/\+/g, "%20"));
-    } catch {
-      // undecodable escapes: compare the URL as-is
-    }
-    return `](${u})`;
-  });
 }
 
 /** The page's current sync-owned values, shaped exactly like syncedValues. */
