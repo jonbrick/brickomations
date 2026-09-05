@@ -2,7 +2,7 @@
 
 The shortcuts, what they touch, and whether they prompt. Details live in each `cli/*.js` header — this table is the map, not the manual.
 
-**Date flags are equals-form only:** `--date=YYYY-MM-DD` or `--from=YYYY-MM-DD --to=YYYY-MM-DD`. Space-separated (`--from 2026-01-01`) silently no-ops.
+**All flags are equals-form only:** `--date=YYYY-MM-DD`, `--from=YYYY-MM-DD --to=YYYY-MM-DD`, `--source=oura`. Space-separated (`--from 2026-01-01`) silently no-ops.
 
 ## Daily — small stuff (health, hobbies, calendars)
 
@@ -10,8 +10,11 @@ The shortcuts, what they touch, and whether they prompt. Details live in each `c
 |---|---|---|
 | `yarn collect --auto` | Oura, Strava, Withings, blood pressure, Steam, GitHub → Notion. ±3 days around today | No |
 | `yarn update --auto` | Notion records (sleep, workouts, weight, BP, gaming, meds, supps, events, trips) → their Google Calendars | No |
-| `yarn collect` / `yarn update` | Same, one source at a time with a date range | Yes — pickers |
+| `yarn collect --auto --source=oura --from=… --to=…` | One source, unattended. Same shape on `yarn update`. Bad `--source` errors with the valid list | No |
+| `yarn collect` / `yarn update` | Interactive pickers; `--source=` / date flags skip their prompt | Yes — remaining pickers |
 | `yarn journal:import` | 5MJ export in `_journal-inbox/` → `data/journal.json`. Empty inbox is a safe no-op | No |
+
+`--source` ids: `oura` `strava` `withings` `bloodPressure` `steam` `githubPersonal` `githubWork` (+ `medications` `supplements` `events` `trips` on `update` only).
 
 No meditation collector exists — that calendar is hand-filled.
 
