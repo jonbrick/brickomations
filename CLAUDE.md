@@ -2,6 +2,8 @@
 
 Brickomations is a personal data pipeline: external APIs (GitHub, Oura, Strava, Steam, Withings) → Notion → Google Calendar → weekly/monthly summaries. Plain Node.js (CommonJS), no TypeScript, no automated tests.
 
+**Script quick reference: `SCRIPTS.md` (repo root).** Read it before exploring `cli/` or `package.json` — it maps every yarn shortcut, what it touches, and which ones prompt.
+
 ## Two repos
 
 Brickomations is one half of the Brickosystem; the other is the Brickocampus vault at `~/projects/brickocampus/` (Obsidian, in Obsidian's iCloud container). They're separate because brickomations has node_modules and a git history that iCloud would corrupt. `data/` is a symlink to `~/Documents/brickography/data/` (iCloud Drive, outside the vault — the local copy of Brickography) — the Mac mini writes (`yarn pull`), the work MacBook reads. Don't run `yarn pull` from the MacBook — it races iCloud sync.
