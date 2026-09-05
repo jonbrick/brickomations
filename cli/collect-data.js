@@ -22,6 +22,11 @@ const { INTEGRATIONS } = require("../src/config/unified-sources");
 const dryRun = process.argv.includes("--dry-run");
 const autoMode = process.argv.includes("--auto");
 
+// --source=<id> pins a single source (equals form, like the date flags):
+// skips the source picker interactively, overrides "all" under --auto.
+const sourceFlagRaw = process.argv.find((a) => a.startsWith("--source="));
+const sourceFlag = sourceFlagRaw ? sourceFlagRaw.split("=")[1] : null;
+
 const { range: cliDateRange, error: cliDateRangeError } = parseDateRangeFromArgv(process.argv);
 if (cliDateRangeError) {
   console.error(cliDateRangeError);
@@ -34,7 +39,7 @@ if (cliDateRangeError) {
  * @param {boolean} options.dryRun - If true, skip action prompt and use display-only
  */
 async function selectAction(options = {}) {
-  const { dryRun: isDryRun = false } = options;
+  const { dryRun: isDryRun = false, preselectedSource = null } = options;
   const collectorIds = getCollectorIds();
 
   // Build choices from collector registry
@@ -65,6 +70,7 @@ async function selectAction(options = {}) {
       message: "Select data source:",
       choices,
       pageSize: 20, // Show all options without scrolling
+      when: () => !preselectedSource,
     },
     {
       type: "list",
@@ -78,7 +84,7 @@ async function selectAction(options = {}) {
     },
   ]);
 
-  const source = answers.source;
+  const source = preselectedSource || answers.source;
   const action = isDryRun ? "display" : answers.action;
   return `${source}-${action}`;
 }
@@ -250,15 +256,26 @@ async function main() {
 
     let source, action, startDate, endDate;
 
+    const validSources = ["all", ...getCollectorIds()];
+    if (sourceFlag && !validSources.includes(sourceFlag)) {
+      console.error(
+        `Unknown --source "${sourceFlag}". Valid values: ${validSources.join(", ")}`
+      );
+      process.exit(1);
+    }
+    const sourceLabel = sourceFlag
+      ? INTEGRATIONS[sourceFlag]?.name || sourceFlag
+      : "all sources";
+
     if (autoMode) {
-      // Auto mode: all sources, sync.
+      // Auto mode: sync, no prompts. --source pins one source (else all).
       // Default range is ±3 days from today; --date/--from/--to override (used by `yarn sync --date=...` backfill).
-      source = "all";
+      source = sourceFlag || "all";
       action = "sync";
       if (cliDateRange) {
         startDate = cliDateRange.fromDate;
         endDate = cliDateRange.toDate;
-        console.log(`Auto mode: all sources, ${formatDate(startDate)} to ${formatDate(endDate)}\n`);
+        console.log(`Auto mode: ${sourceLabel}, ${formatDate(startDate)} to ${formatDate(endDate)}\n`);
       } else {
         const today = new Date();
         startDate = new Date(today);
@@ -267,11 +284,14 @@ async function main() {
         endDate = new Date(today);
         endDate.setDate(today.getDate() + 3);
         endDate.setHours(23, 59, 59, 999);
-        console.log(`Auto mode: all sources, +/- 3 days (${formatDate(startDate)} to ${formatDate(endDate)})\n`);
+        console.log(`Auto mode: ${sourceLabel}, +/- 3 days (${formatDate(startDate)} to ${formatDate(endDate)})\n`);
       }
     } else {
-      // Interactive mode
-      const actionString = await selectAction({ dryRun });
+      // Interactive mode (--source skips the picker; action still prompts)
+      const actionString = await selectAction({
+        dryRun,
+        preselectedSource: sourceFlag,
+      });
       [source, action] = actionString.split("-");
 
       // --from/--to passed without --auto: honor the flags, skip the prompt.
