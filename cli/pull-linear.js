@@ -3,15 +3,18 @@
 /**
  * Pull Linear CLI
  *
- * The Linear → Notion collector, and nothing else: upserts assigned
- * issues into the shared 2026 Tasks DB and assigned projects (lead or
- * member, any state, on the LINEAR_PROJECT_TEAM_KEYS teams) into the
- * shared 2026 Projects DB, so Notion is the one holistic layer for
- * phone-side retro/planning.
+ * The Linear → Notion collector: upserts assigned issues into the shared
+ * 2026 Tasks DB and assigned projects (lead or member, any state, on the
+ * LINEAR_PROJECT_TEAM_KEYS teams) into the shared 2026 Projects DB, so
+ * Notion is the one holistic layer for phone-side retro/planning.
  *
- * Writes no local JSON — local work state derives from Notion via
- * `yarn pull` (both DBs land in data/life.json), same as every other
- * source. Sessions (plan:bundle, retros, fill-tasks skills) read that.
+ * Also writes ONE local JSON, data/linearTeam.json — the design-team
+ * view Notion deliberately doesn't carry: issues assigned to the
+ * LINEAR_DESIGN_TEAM_EMAILS roster (any team, delegation visible via
+ * Creator) plus the viewer's recent issue comments. Local-only, never
+ * synced to Notion; retro/audit sessions query it directly. All other
+ * local work state still derives from Notion via `yarn pull` (both DBs
+ * land in data/life.json), same as every other source.
  *
  * Deliberately separate from `yarn pull` / `yarn sync`: a Linear failure
  * must not stale the Notion/Calendar caches. Own launchd job
@@ -47,6 +50,11 @@ const JOB_NAME = "pull-linear";
 const DRY_RUN = process.argv.includes("--dry-run");
 
 const COMPLETED_WINDOW_DAYS = 21;
+// Rolling window for the viewer's own comments in the local team cache —
+// wide enough that a weekly retro run any time the following week still
+// sees the full prior week, with room for a lapsed week or two.
+const COMMENT_WINDOW_DAYS = 35;
+const TEAM_CACHE_FILE = path.join(DATA_DIR, "linearTeam.json");
 // Bounded runtime: the per-job wakelock lasts as long as the process, so a
 // hung API call must not hold the mini awake. A handful of GraphQL pages
 // takes seconds; 3 minutes is the same per-step budget yarn sync uses.
@@ -145,6 +153,63 @@ function toTaskRecord(node, weeks) {
   };
 }
 
+/**
+ * NY-local YYYY-MM-DD for an ISO datetime — comment timestamps are UTC and
+ * would otherwise week-bucket late-evening comments onto the next day.
+ */
+function nyDate(isoDatetime) {
+  if (!isoDatetime) return "";
+  return new Date(isoDatetime).toLocaleDateString("en-CA", {
+    timeZone: "America/New_York",
+  });
+}
+
+/**
+ * Team-cache issue record: toTaskRecord minus the bulky description, plus
+ * the fields delegation queries need (Creator, Assignee Email, created /
+ * updated stamps). Week Number derives from the due date, matching tasks.
+ */
+function toTeamIssueRecord(node, weeks) {
+  return {
+    Identifier: node.identifier,
+    Task: node.title,
+    Status: node.state.name,
+    "State Type": node.state.type,
+    Assignee: node.assignee ? node.assignee.name : "",
+    "Assignee Email": node.assignee ? node.assignee.email : "",
+    Creator: node.creator ? node.creator.name : "",
+    "Due Date": node.dueDate || "",
+    "Week Number": weekNumberFor(node.dueDate, weeks),
+    Priority: node.priorityLabel === "No priority" ? "" : node.priorityLabel,
+    Project: node.project ? node.project.name : "",
+    Team: node.team ? node.team.key : "",
+    URL: node.url,
+    "Created At": node.createdAt || "",
+    "Updated At": node.updatedAt || "",
+    "Completed At": node.completedAt || "",
+    "Canceled At": node.canceledAt || "",
+  };
+}
+
+/**
+ * Team-cache comment record. Week Number derives from the NY-local date
+ * the comment was written — that's the "what did I touch this week" axis.
+ * Body is capped: the cache tracks touches, it isn't a comment archive.
+ */
+function toCommentRecord(node, weeks) {
+  const day = nyDate(node.createdAt);
+  return {
+    Identifier: node.issue.identifier,
+    Issue: node.issue.title,
+    Assignee: node.issue.assignee ? node.issue.assignee.name : "",
+    Team: node.issue.team ? node.issue.team.key : "",
+    Date: day,
+    "Week Number": weekNumberFor(day, weeks),
+    Body: (node.body || "").slice(0, 500),
+    URL: node.url || node.issue.url,
+  };
+}
+
 // --- Main ---
 
 async function main() {
@@ -157,6 +222,16 @@ async function main() {
   if (teamKeys.length === 0) {
     throw new Error(
       "LINEAR_PROJECT_TEAM_KEYS is required (comma-separated Linear team keys for the projects pull)"
+    );
+  }
+
+  const rosterEmails = (process.env.LINEAR_DESIGN_TEAM_EMAILS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (rosterEmails.length === 0) {
+    throw new Error(
+      "LINEAR_DESIGN_TEAM_EMAILS is required (comma-separated Linear member emails for the local team cache)"
     );
   }
 
@@ -189,6 +264,49 @@ async function main() {
     .map(toAssignedProjectRecord)
     .sort((a, b) => a.Name.localeCompare(b.Name));
 
+  // Local team cache: roster-assigned issues + the viewer's recent issue
+  // comments. Fetched before any Notion write so a cache failure fails the
+  // whole run loudly rather than leaving a fresh Notion / stale cache split.
+  const rosterNodes = await linear.getIssuesAssignedToEmails(
+    rosterEmails,
+    completedCutoff
+  );
+  console.log(
+    `  ✓ ${rosterNodes.length} team-roster issues (${rosterEmails.length} members, ` +
+      `completed kept ${COMPLETED_WINDOW_DAYS} days back)`
+  );
+
+  const commentCutoff = new Date(
+    Date.now() - COMMENT_WINDOW_DAYS * 24 * 60 * 60 * 1000
+  ).toISOString();
+  const commentNodes = (await linear.getMyRecentComments(commentCutoff)).filter(
+    (node) => node.issue
+  );
+  console.log(
+    `  ✓ ${commentNodes.length} of my issue comments (last ${COMMENT_WINDOW_DAYS} days)`
+  );
+
+  const teamIssues = rosterNodes
+    .map((node) => toTeamIssueRecord(node, weeks))
+    .sort(
+      (a, b) =>
+        a.Assignee.localeCompare(b.Assignee) ||
+        a.Identifier.localeCompare(b.Identifier)
+    );
+  const myComments = commentNodes
+    .map((node) => toCommentRecord(node, weeks))
+    .sort((a, b) => b.Date.localeCompare(a.Date));
+  const teamCache = {
+    _meta: {
+      pulledAt: new Date().toISOString(),
+      roster: rosterEmails,
+      completedWindowDays: COMPLETED_WINDOW_DAYS,
+      commentWindowDays: COMMENT_WINDOW_DAYS,
+    },
+    teamIssues,
+    myComments,
+  };
+
   const tasks = issues.map((node) => toTaskRecord(node, weeks));
   // Dated first (soonest due at top), then undated; Identifier breaks ties.
   tasks.sort((a, b) => {
@@ -213,9 +331,19 @@ async function main() {
         `${projectSync.unchanged} unchanged`
     );
     for (const action of projectSync.actions) console.log(`  ${action}`);
-    console.log("\n[dry-run] nothing written (no Notion, no heartbeat)");
+    console.log(
+      `\n[dry-run] team cache plan: ${teamIssues.length} issues, ` +
+        `${myComments.length} comments → ${TEAM_CACHE_FILE}`
+    );
+    console.log("\n[dry-run] nothing written (no Notion, no local JSON, no heartbeat)");
     return;
   }
+
+  fs.writeFileSync(TEAM_CACHE_FILE, JSON.stringify(teamCache, null, 2));
+  console.log(
+    `✅ data/linearTeam.json written (${teamIssues.length} team issues, ` +
+      `${myComments.length} of my comments)`
+  );
 
   // Linear → Notion: upsert issues into the shared 2026 Tasks DB so Notion
   // is the one holistic layer for phone-side retro/planning. Upsert on
@@ -237,7 +365,8 @@ async function main() {
     "ok",
     `notion tasks +${sync.created}/~${sync.updated}/gone ${sync.gone}, ` +
       `notion projects +${projectSync.created}/~${projectSync.updated}/gone ` +
-      `${projectSync.gone}`
+      `${projectSync.gone}, team cache ${teamIssues.length} issues/` +
+      `${myComments.length} comments`
   );
 }
 

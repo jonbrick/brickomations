@@ -177,6 +177,109 @@ class LinearService {
   }
 
   /**
+   * Issues assigned to any of the given member emails — any team, every
+   * state, completed/canceled kept only within the cutoff window (same
+   * window semantics as getAssignedIssues). One query per member: the
+   * roster is small and per-member filters stay trivial. Slim nodes for
+   * the local team cache — no description (bulk) and no sync fields.
+   */
+  async getIssuesAssignedToEmails(emails, completedCutoff) {
+    const stateFilter = {
+      or: [
+        { and: [{ completedAt: { null: true } }, { canceledAt: { null: true } }] },
+        { completedAt: { gt: completedCutoff } },
+        { canceledAt: { gt: completedCutoff } },
+      ],
+    };
+
+    const nodes = [];
+    for (const email of emails) {
+      let after = null;
+      do {
+        const data = await this.graphql(
+          `query TeamMemberIssues($filter: IssueFilter!, $first: Int!, $after: String) {
+            issues(first: $first, after: $after, filter: $filter) {
+              nodes {
+                identifier
+                title
+                url
+                dueDate
+                priorityLabel
+                createdAt
+                updatedAt
+                completedAt
+                canceledAt
+                state { name type }
+                assignee { name email }
+                creator { name }
+                project { name }
+                team { key }
+              }
+              pageInfo { hasNextPage endCursor }
+            }
+          }`,
+          {
+            filter: { and: [{ assignee: { email: { eq: email } } }, stateFilter] },
+            first: PAGE_SIZE,
+            after,
+          }
+        );
+        const page = data.issues;
+        nodes.push(...page.nodes);
+        after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+      } while (after);
+    }
+
+    return nodes;
+  }
+
+  /**
+   * Comments the authenticated user wrote since the cutoff (ISO datetime),
+   * newest first. Comments on projects/documents carry a null issue — the
+   * caller filters to issue comments. Feeds the "what did I touch this
+   * week" view in the local team cache.
+   */
+  async getMyRecentComments(cutoff) {
+    const nodes = [];
+    let after = null;
+
+    do {
+      const data = await this.graphql(
+        `query MyRecentComments($filter: CommentFilter!, $first: Int!, $after: String) {
+          comments(first: $first, after: $after, filter: $filter) {
+            nodes {
+              body
+              createdAt
+              url
+              issue {
+                identifier
+                title
+                url
+                assignee { name }
+                team { key }
+              }
+            }
+            pageInfo { hasNextPage endCursor }
+          }
+        }`,
+        {
+          filter: {
+            user: { isMe: { eq: true } },
+            createdAt: { gt: cutoff },
+          },
+          first: PAGE_SIZE,
+          after,
+        }
+      );
+      const page = data.comments;
+      nodes.push(...page.nodes);
+      after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+    } while (after);
+
+    return nodes;
+  }
+
+  /**
    * Issues assigned to the authenticated user, any team, every state.
    * Completed and canceled issues only within the given cutoff window (ISO
    * datetime) — older ones fall out of the cache. Canceled issues are kept
