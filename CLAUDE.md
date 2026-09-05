@@ -2,7 +2,7 @@
 
 Brickomations is a personal data pipeline: external APIs (GitHub, Oura, Strava, Steam, Withings) → Notion → Google Calendar → weekly/monthly summaries. Plain Node.js (CommonJS), no TypeScript, no automated tests.
 
-**Script quick reference: `SCRIPTS.md` (repo root).** Read it before exploring `cli/` or `package.json` — it maps every yarn shortcut, what it touches, and which ones prompt.
+**Script quick reference: `YARN-SCRIPTS.md` (repo root).** Read it before exploring `cli/` or `package.json` — it maps every yarn shortcut, what it touches, and which ones prompt.
 
 ## Two repos
 
