@@ -68,7 +68,10 @@ const CREATE_ONLY_CATEGORY = "💼 Work";
 // Work Category is Jon-owned like Category: seeded from the project's
 // teams on create only, never overwritten. A project can be on several
 // teams — first mapped key wins. Unmapped teams get no seed.
+// PD is the Product Design team's key since Sep 2026; DSGN kept so
+// pre-rename local snapshots still resolve.
 const CREATE_ONLY_WORK_CATEGORY_BY_TEAM = {
+  PD: "🎨 Design",
   DSGN: "🎨 Design",
   DE: "🖥️ Coding",
 };
@@ -84,6 +87,7 @@ function workCategoryFor(project) {
 // icon gets reverted next run. Cross-team projects: first mapped key wins.
 // Unmapped teams get "" and the icon is left alone.
 const ICON_BY_TEAM = {
+  PD: "🎨",
   DSGN: "🎨",
   DE: "🏗️",
 };
