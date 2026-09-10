@@ -64,7 +64,10 @@ const CREATE_ONLY_CATEGORY = "💼 Work";
 
 // WORK Category is Jon-owned like Category: seeded from the issue's Linear
 // team on create only, never overwritten. Unmapped teams get no seed.
+// PD is the Product Design team's key since Sep 2026; DSGN kept so
+// pre-rename local snapshots still resolve.
 const CREATE_ONLY_WORK_CATEGORY_BY_TEAM = {
+  PD: "🎨 Design",
   DSGN: "🎨 Design",
   DE: "🖥️ Coding",
 };
