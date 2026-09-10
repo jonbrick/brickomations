@@ -102,6 +102,8 @@ function main() {
   const habits = joinByWeek(life.habits, weekNotionId).map(strip);
   const habitsPlan =
     joinByWeek(life.habitsPlan, weekNotionId).map(strip)[0] || null;
+  const workPlan =
+    joinByWeek(life.workWeeksPlan, weekNotionId).map(strip)[0] || null;
   const tasks = (life.tasks || [])
     .filter((t) => inRange(t["Due Date"], start, end))
     .map(strip);
@@ -132,6 +134,7 @@ function main() {
     },
     habits,
     habitsPlan,
+    workPlan,
     tasks,
     journal: journalEntries,
   };

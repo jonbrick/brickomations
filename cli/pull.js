@@ -288,7 +288,17 @@ async function pullLifeData(spinner) {
 
   for (const [key, dbConfig] of Object.entries(LIFE_DATABASES)) {
     const dbId = process.env[dbConfig.envVar];
-    if (!dbId) continue;
+    if (!dbId) {
+      // No env var on this machine — preserve the bucket another machine may
+      // have pulled (mirrors the error path below) and say so; a silent skip
+      // both drops the bucket from life.json and reads as a successful pull.
+      const preserved = Array.isArray(existingLife?.[key]) ? existingLife[key] : null;
+      if (preserved) life[key] = preserved;
+      spinner.stop(
+        `  ⊘ ${dbConfig.label}: env var ${dbConfig.envVar} not set${preserved ? ` (kept ${preserved.length} existing)` : ""}`
+      );
+      continue;
+    }
 
     try {
       spinner.start();
