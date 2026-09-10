@@ -257,10 +257,24 @@ function buildCalendarBody(calendar, date) {
 
 // ---- surgical section rewrite ---------------------------------------------
 
+// All lookups are scoped to the ## Evening Report zone: ## Morning Brief owns
+// same-named ### Tasks and ### Calendar sections higher in the note (since
+// 2026-09-10), so a file-global first-match would land on the morning plan.
+
+// Index of the ## Evening Report heading (legacy alias: ## Logs, pre-2026-08-03
+// notes — same alias send-daily-text.js honors). -1 if the note has neither.
+function eveningZoneStart(lines) {
+  return lines.findIndex(
+    (l) => l.trim() === "## Evening Report" || l.trim() === "## Logs"
+  );
+}
+
 // Replace the body under `### <heading>` (up to the next ### / ## / --- / EOF)
-// with newLines + one trailing blank. Returns { lines, found }.
-function replaceSubsection(lines, heading, newLines) {
-  const idx = lines.findIndex((l) => l.trim() === `### ${heading}`);
+// with newLines + one trailing blank, searching from startAt. Returns { lines, found }.
+function replaceSubsection(lines, heading, newLines, startAt) {
+  const idx = lines.findIndex(
+    (l, i) => i >= startAt && l.trim() === `### ${heading}`
+  );
   if (idx === -1) return { lines, found: false };
   let end = lines.length;
   for (let i = idx + 1; i < lines.length; i++) {
@@ -275,9 +289,11 @@ function replaceSubsection(lines, heading, newLines) {
 
 // Rename the tasks heading to `### Tasks` (from either name) and replace its body.
 // Handles today's notes (### Completed Tasks) and future ones (### Tasks) alike.
-function upsertTasks(lines, newLines) {
+function upsertTasks(lines, newLines, startAt) {
   const idx = lines.findIndex(
-    (l) => l.trim() === "### Tasks" || l.trim() === "### Completed Tasks"
+    (l, i) =>
+      i >= startAt &&
+      (l.trim() === "### Tasks" || l.trim() === "### Completed Tasks")
   );
   if (idx === -1) return { lines, found: false };
   let end = lines.length;
@@ -293,11 +309,13 @@ function upsertTasks(lines, newLines) {
 
 // Insert-or-replace a `### <heading>` section. If present, replace its body; else
 // insert a fresh section immediately after the `### <afterHeading>` block.
-function upsertSection(lines, heading, newLines, afterHeading) {
-  if (lines.some((l) => l.trim() === `### ${heading}`)) {
-    return replaceSubsection(lines, heading, newLines);
+function upsertSection(lines, heading, newLines, afterHeading, startAt) {
+  if (lines.some((l, i) => i >= startAt && l.trim() === `### ${heading}`)) {
+    return replaceSubsection(lines, heading, newLines, startAt);
   }
-  const aIdx = lines.findIndex((l) => l.trim() === `### ${afterHeading}`);
+  const aIdx = lines.findIndex(
+    (l, i) => i >= startAt && l.trim() === `### ${afterHeading}`
+  );
   if (aIdx === -1) return { lines, found: false };
   let end = lines.length;
   for (let i = aIdx + 1; i < lines.length; i++) {
@@ -333,15 +351,18 @@ function main() {
   const notePath = resolveNote(date);
   let lines = fs.readFileSync(notePath, "utf8").split("\n");
 
-  const rTasks = upsertTasks(lines, tasksBody);
-  const rEvents = replaceSubsection(rTasks.lines, "Completed Events", eventsBody);
-  const rCal = upsertSection(rEvents.lines, "Calendar", calBody, "Completed Events");
+  const zoneStart = eveningZoneStart(lines);
+  const notFound = { lines, found: false };
+  const rTasks = zoneStart === -1 ? notFound : upsertTasks(lines, tasksBody, zoneStart);
+  const rEvents = zoneStart === -1 ? notFound : replaceSubsection(rTasks.lines, "Completed Events", eventsBody, zoneStart);
+  const rCal = zoneStart === -1 ? notFound : upsertSection(rEvents.lines, "Calendar", calBody, "Completed Events", zoneStart);
   lines = rCal.lines;
 
   const missing = [];
-  if (!rTasks.found) missing.push("### Tasks / ### Completed Tasks");
-  if (!rEvents.found) missing.push("### Completed Events");
-  if (!rCal.found) missing.push("### Calendar (anchor ### Completed Events)");
+  if (zoneStart === -1) missing.push("## Evening Report (zone heading)");
+  if (!rTasks.found) missing.push("### Tasks / ### Completed Tasks (under ## Evening Report)");
+  if (!rEvents.found) missing.push("### Completed Events (under ## Evening Report)");
+  if (!rCal.found) missing.push("### Calendar (under ## Evening Report, anchor ### Completed Events)");
 
   if (args.dryRun) {
     console.log(`[dry-run] ${date} · note: ${notePath}`);
