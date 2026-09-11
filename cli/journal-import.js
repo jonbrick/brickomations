@@ -100,9 +100,9 @@ function transformRecords(rawRecords) {
       return {
         date: r.date,
         gratitude: getItems(morning, "gratitude"),
-        greatness: getItems(morning, "greatness"),
+        intentions: getItems(morning, "greatness"),
         affirmation: getItems(morning, "affirmation").join(" "),
-        amazingness: getItems(evening, "amazingness"),
+        wins: getItems(evening, "amazingness"),
         improvements: getItems(evening, "improvements"),
       };
     })
@@ -110,9 +110,9 @@ function transformRecords(rawRecords) {
       // Skip completely empty entries
       return (
         r.gratitude.length > 0 ||
-        r.greatness.length > 0 ||
+        r.intentions.length > 0 ||
         r.affirmation ||
-        r.amazingness.length > 0 ||
+        r.wins.length > 0 ||
         r.improvements.length > 0
       );
     })
@@ -203,7 +203,7 @@ function importAndWrite(inputPaths) {
 
   // Stats
   const withGratitude = allEntries.filter((r) => r.gratitude.length > 0).length;
-  const withEvening = allEntries.filter((r) => r.amazingness.length > 0).length;
+  const withEvening = allEntries.filter((r) => r.wins.length > 0).length;
   console.log(
     `   ${withGratitude} with morning entries, ${withEvening} with evening entries\n`
   );
