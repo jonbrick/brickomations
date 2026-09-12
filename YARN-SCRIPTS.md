@@ -1,73 +1,127 @@
 # Brickomations Yarn Scripts
 
-The shortcuts, what they touch, and whether they prompt. Details live in each `cli/*.js` header — this file is the map, not the manual.
+The shortcuts, what they touch, and whether they prompt. Details live in
+each cli/*.js header — this file is the map, not the manual.
 
-**All flags are equals-form only:** `--date=YYYY-MM-DD`, `--from=YYYY-MM-DD --to=YYYY-MM-DD`, `--source=oura`. Space-separated (`--from 2026-01-01`) silently no-ops.
+Every command line is paste-safe: triple-click the line, paste, enter —
+the shell runs the command and ignores the # description.
+
+ALL FLAGS ARE EQUALS-FORM ONLY: --date=YYYY-MM-DD, --from=YYYY-MM-DD
+--to=YYYY-MM-DD, --source=oura. Space-separated (--from 2026-01-01)
+silently no-ops.
 
 ## The two I paste
 
-Morning refresh — external sources → Notion + their calendars, ±3 days, no prompts. Skips the Notion-native four (meds, supps, events, trips — events/trips rewrite their full DBs, the slow leg):
-
 ```
-yarn morning
-```
+yarn morning                # external sources → Notion + their calendars.
+#                             ±3 days. skips meds/supps/events/trips (the
+#                             slow full-DB legs). no prompts
 
-Linear refresh — assigned issues → Notion 2026 Tasks, no prompts. Skips projects sync, team cache, and heartbeat — safe from the MacBook:
-
-```
-yarn linear:tasks
+yarn linear:tasks           # assigned issues → Notion 2026 Tasks. skips
+#                             projects sync, team cache, heartbeat — safe
+#                             from the MacBook. no prompts
 ```
 
 ## Daily — small stuff (health, hobbies, calendars)
 
-- `yarn collect --auto`
-  Oura, Strava, Withings, blood pressure, Steam, GitHub → Notion. ±3 days around today. No prompts.
-- `yarn update --auto`
-  Notion records (sleep, workouts, weight, BP, gaming, meds, supps, events, trips) → their Google Calendars. No prompts.
-- `yarn update --auto --external-only`
-  Same, minus the Notion-native four (meds, supps, events, trips). Half of `yarn morning`. No prompts.
-- `yarn collect --auto --source=oura --from=… --to=…`
-  One source, unattended. Same shape on `yarn update`. Bad `--source` errors with the valid list. No prompts.
-- `yarn collect` / `yarn update`
-  Interactive pickers; `--source=` / date flags skip their prompt.
-- `yarn journal:import`
-  5MJ export in `_journal-inbox/` → `data/journal.json`. Empty inbox is a safe no-op. No prompts.
+```
+yarn collect --auto         # Oura, Strava, Withings, blood pressure,
+#                             Steam, GitHub → Notion. ±3 days around
+#                             today. no prompts
 
-`--source` ids: `oura` `strava` `withings` `bloodPressure` `steam` `githubPersonal` `githubWork` (+ `medications` `supplements` `events` `trips` on `update` only).
+yarn update --auto          # Notion records (sleep, workouts, weight, BP,
+#                             gaming, meds, supps, events, trips) → their
+#                             Google Calendars. no prompts
+
+yarn update --auto --external-only
+#                             same, minus the Notion-native four (meds,
+#                             supps, events, trips). half of yarn morning.
+#                             no prompts
+
+yarn collect --auto --source=oura --from=… --to=…
+#                             one source, unattended. same shape on
+#                             yarn update. bad --source errors with the
+#                             valid list. no prompts
+
+yarn collect                # interactive pickers (same on yarn update);
+#                             --source= / date flags skip their prompt.
+#                             PROMPTS
+
+yarn journal:import         # 5MJ export in _journal-inbox/ →
+#                             data/journal.json. empty inbox is a safe
+#                             no-op. no prompts
+```
+
+--source ids: oura strava withings bloodPressure steam githubPersonal
+githubWork (+ medications supplements events trips on update only).
 
 No meditation collector exists — that calendar is hand-filled.
 
 ## Weekly — planning & work state
 
-- `yarn pull --auto`
-  Notion → local `data/*.json` (tasks, rocks, plans, retros, goals, projects). **Mini only** — racing iCloud from the MacBook corrupts `data/`. No prompts.
-- `yarn pull:linear`
-  Linear → Notion (assigned issues → 2026 Tasks, assigned projects → 2026 Projects) **and** → local `data/linearTeam.json` (design-team roster issues + my recent comments). `--dry-run` previews; `--tasks-only` is the issues-only leg behind `yarn linear:tasks`. No prompts.
-- `yarn push --auto`
-  Local retro/plan edits → Notion. Manual + skill-invoked only, never scheduled. No prompts.
-- `yarn vault-sync`
-  Notion → Obsidian vault mirrors (`personal/`). No prompts.
+```
+yarn pull --auto            # Notion → local data/*.json (tasks, rocks,
+#                             plans, retros, goals, projects). MINI ONLY —
+#                             racing iCloud from the MacBook corrupts
+#                             data/. no prompts
+
+yarn pull:linear            # Linear → Notion (assigned issues → 2026
+#                             Tasks, assigned projects → 2026 Projects)
+#                             AND → local data/linearTeam.json (design-team
+#                             roster issues + my recent comments).
+#                             --dry-run previews; --tasks-only is the
+#                             issues-only leg behind yarn linear:tasks.
+#                             no prompts
+
+yarn push --auto            # local retro/plan edits → Notion. manual +
+#                             skill-invoked only, never scheduled.
+#                             no prompts
+
+yarn vault-sync             # Notion → Obsidian vault mirrors (personal/).
+#                             no prompts
+```
 
 ## Bundles — session inputs for skills
 
-- `yarn retro:bundle <N>`
-  Week N retro bundle (use `--silent`; pair with `node scripts/retro-readiness.js <N> <N>`).
-- `yarn plan:bundle <N>`
-  Week N planning bundle.
-- `node scripts/retro-weeks.js personal|work`
-  Which weeks still need retro work.
-- `node scripts/reconcile-planned-events.js --pull <N>`
-  Audit `Planned:` calendar events for week N.
+```
+yarn retro:bundle <N>       # week N retro bundle (use --silent; pair with
+#                             node scripts/retro-readiness.js <N> <N>)
+
+yarn plan:bundle <N>        # week N planning bundle
+
+node scripts/retro-weeks.js personal
+#                             which weeks still need retro work (arg:
+#                             personal or work)
+
+node scripts/reconcile-planned-events.js --pull <N>
+#                             audit Planned: calendar events for week N
+```
 
 ## Heavy — the full pipeline
 
-- `yarn sync`
-  tokens → collect → update → summarize → aggregate → pull → vault-sync. The Mac mini runs this on schedule — manual runs are for backfills (`yarn sync --from=… --to=…`).
-- `yarn summarize` / `yarn aggregate`
-  Week / month rollups alone. Both prompt without `--auto`.
-- `yarn tokens:check` / `tokens:refresh`
-  OAuth token health.
+```
+yarn sync                   # tokens → collect → update → summarize →
+#                             aggregate → pull → vault-sync. the Mac mini
+#                             runs this on schedule — manual runs are for
+#                             backfills (yarn sync --from=… --to=…)
 
-## Local data map (`data/` = iCloud Brickography)
+yarn summarize              # week rollups alone (month: yarn aggregate).
+#                             both PROMPT without --auto
 
-`life.json` tasks/plans/projects · `plan.json` weeks/rocks/events · `retro.json` retros · `summaries.json` week+month rollups · `calendar.json` habit calendars · `collected.json` raw sources · `journal.json` 5MJ · `linearTeam.json` design-team Linear view (roster issues + my comments, week-numbered)
+yarn tokens:check           # OAuth token health (refresh:
+#                             yarn tokens:refresh)
+```
+
+## Local data map (data/ = iCloud Brickography)
+
+```
+life.json                   # tasks / plans / projects
+plan.json                   # weeks / rocks / events
+retro.json                  # retros
+summaries.json              # week + month rollups
+calendar.json               # habit calendars
+collected.json              # raw sources
+journal.json                # 5MJ
+linearTeam.json             # design-team Linear view (roster issues +
+#                             my comments, week-numbered)
+```
