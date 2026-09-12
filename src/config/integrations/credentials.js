@@ -19,9 +19,16 @@ let _ghTokenCache = null;
 function getGitHubToken() {
   if (_ghTokenCache !== null) return _ghTokenCache;
   try {
+    // gh echoes a GITHUB_TOKEN/GH_TOKEN env var instead of the Keychain
+    // login when one is set — a stale PAT in .env (loaded by dotenv) would
+    // silently shadow the live token. Strip both so the Keychain always wins.
+    const env = { ...process.env };
+    delete env.GITHUB_TOKEN;
+    delete env.GH_TOKEN;
     _ghTokenCache = execSync(`${GH_BIN} auth token`, {
       encoding: "utf8",
       stdio: ["pipe", "pipe", "ignore"],
+      env,
     }).trim();
   } catch {
     _ghTokenCache = undefined;
