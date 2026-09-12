@@ -270,8 +270,9 @@ async function main() {
     if (autoMode) {
       // Auto mode: sync, no prompts. --source pins one source (else all).
       // Default range is ±3 days from today; --date/--from/--to override (used by `yarn sync --date=...` backfill).
+      // --dry-run must hold here too — a preview flag that writes is a trap.
       source = sourceFlag || "all";
-      action = "sync";
+      action = dryRun ? "display" : "sync";
       if (cliDateRange) {
         startDate = cliDateRange.fromDate;
         endDate = cliDateRange.toDate;

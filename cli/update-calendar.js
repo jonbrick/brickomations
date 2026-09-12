@@ -2,6 +2,11 @@
 /**
  * Update Calendar CLI
  * Sync sleep and workout records from Notion to Google Calendar
+ *
+ * --external-only (yarn morning) restricts "all" to the calendars fed by
+ * external collectors (Oura, Strava, Withings, blood pressure, Steam,
+ * GitHub) — skips the Notion-native updaters (medications, supplements,
+ * events, trips), whose events/trips legs rewrite their full DBs every run.
  */
 
 require("dotenv").config();
@@ -30,6 +35,16 @@ const autoMode = process.argv.includes("--auto");
 // skips the source picker interactively, overrides "all" under --auto.
 const sourceFlagRaw = process.argv.find((a) => a.startsWith("--source="));
 const sourceFlag = sourceFlagRaw ? sourceFlagRaw.split("=")[1] : null;
+
+// --external-only narrows "all" to updaters that also collect (external
+// APIs). Pinning a single source at the same time is contradictory.
+const externalOnly = process.argv.includes("--external-only");
+if (externalOnly && sourceFlag) {
+  console.error(
+    "--external-only filters all sources; it can't combine with --source=. Drop one."
+  );
+  process.exit(1);
+}
 
 const { range: cliDateRange, error: cliDateRangeError } = parseDateRangeFromArgv(process.argv);
 if (cliDateRangeError) {
@@ -102,7 +117,9 @@ async function handleAllCalendarSyncs(startDate, endDate, action) {
   console.log(`Action: ${action === "sync" ? "Sync to Calendar" : "Display only"}\n`);
 
   const startTime = Date.now();
-  const updaterIds = getUpdaterIds();
+  const updaterIds = getUpdaterIds().filter(
+    (id) => !externalOnly || INTEGRATIONS[id].collect === true
+  );
 
   // Build sources list with names from INTEGRATIONS
   const sources = updaterIds
@@ -338,13 +355,16 @@ async function main() {
     }
     const sourceLabel = sourceFlag
       ? INTEGRATIONS[sourceFlag]?.name || sourceFlag
-      : "all sources";
+      : externalOnly
+        ? "external sources only"
+        : "all sources";
 
     if (autoMode) {
       // Auto mode: sync, no prompts. --source pins one source (else all).
       // Default range is ±3 days from today; --date/--from/--to override (used by `yarn sync --date=...` backfill).
+      // --dry-run must hold here too — a preview flag that writes is a trap.
       source = sourceFlag || "all";
-      action = "sync";
+      action = dryRun ? "display" : "sync";
       if (cliDateRange) {
         startDate = cliDateRange.fromDate;
         endDate = cliDateRange.toDate;

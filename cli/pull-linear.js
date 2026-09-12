@@ -23,11 +23,17 @@
  * Fail loud, never partial: the Notion sync runs only after every fetch
  * has succeeded; any error pings the heartbeat as failed and exits 1.
  *
- * Usage: yarn pull:linear [--dry-run]
+ * Usage: yarn pull:linear [--dry-run] [--tasks-only]
  *
  * --dry-run reads Linear and Notion, prints the would-be Notion actions
  * (creates/updates/gone), and writes nothing — no Notion writes, no
  * heartbeat ping.
+ *
+ * --tasks-only (yarn linear:tasks) runs just the assigned-issues → Notion
+ * 2026 Tasks leg: no projects sync, no team-roster/comments fetch, no
+ * data/linearTeam.json write (iCloud-safe from the MacBook), and no
+ * heartbeat ping — the pull-linear heartbeat attests the full scheduled
+ * job, and a partial manual run must not vouch for legs it skipped.
  *
  * @layer 1 - Integration (CLI)
  */
@@ -48,6 +54,7 @@ const DATA_DIR = path.join(REPO_ROOT, "data");
 const HEARTBEAT_SCRIPT = path.join(REPO_ROOT, "scripts", "heartbeat-ping.sh");
 const JOB_NAME = "pull-linear";
 const DRY_RUN = process.argv.includes("--dry-run");
+const TASKS_ONLY = process.argv.includes("--tasks-only");
 
 const COMPLETED_WINDOW_DAYS = 21;
 // Rolling window for the viewer's own comments in the local team cache —
@@ -63,7 +70,9 @@ const WALL_CLOCK_TIMEOUT_MS = 3 * 60 * 1000;
 // --- Heartbeat ---
 
 function pingHeartbeat(status, message) {
-  if (DRY_RUN) return; // a rehearsal is not a run — don't touch the heartbeat
+  // A rehearsal is not a run, and a tasks-only run skips legs the heartbeat
+  // attests — neither may touch it.
+  if (DRY_RUN || TASKS_ONLY) return;
   try {
     const args = [JOB_NAME, status];
     if (message) args.push(message);
@@ -213,13 +222,17 @@ function toCommentRecord(node, weeks) {
 // --- Main ---
 
 async function main() {
-  console.log("[pull-linear] pulling Linear projects + assigned issues");
+  console.log(
+    TASKS_ONLY
+      ? "[pull-linear] pulling assigned issues (tasks-only)"
+      : "[pull-linear] pulling Linear projects + assigned issues"
+  );
 
   const teamKeys = (process.env.LINEAR_PROJECT_TEAM_KEYS || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  if (teamKeys.length === 0) {
+  if (!TASKS_ONLY && teamKeys.length === 0) {
     throw new Error(
       "LINEAR_PROJECT_TEAM_KEYS is required (comma-separated Linear team keys for the projects pull)"
     );
@@ -229,7 +242,7 @@ async function main() {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  if (rosterEmails.length === 0) {
+  if (!TASKS_ONLY && rosterEmails.length === 0) {
     throw new Error(
       "LINEAR_DESIGN_TEAM_EMAILS is required (comma-separated Linear member emails for the local team cache)"
     );
@@ -251,61 +264,70 @@ async function main() {
 
   // The projects leg pulls by assignment (lead or member), all states,
   // scoped to the configured teams — cross-team projects Jon is merely
-  // attached to (e.g. as a stakeholder) stay out.
-  const assignedNodes = await linear.getAssignedProjects(viewer.id);
-  const teamScopedNodes = assignedNodes.filter((node) =>
-    (node.teams?.nodes || []).some((t) => teamKeys.includes(t.key))
-  );
-  console.log(
-    `  ✓ ${teamScopedNodes.length} assigned ${teamKeys.join("/")} projects ` +
-      `(lead or member, all states; ${assignedNodes.length} assigned overall)`
-  );
-  const assignedProjects = teamScopedNodes
-    .map(toAssignedProjectRecord)
-    .sort((a, b) => a.Name.localeCompare(b.Name));
+  // attached to (e.g. as a stakeholder) stay out. Skipped under --tasks-only.
+  let assignedProjects = [];
+  if (!TASKS_ONLY) {
+    const assignedNodes = await linear.getAssignedProjects(viewer.id);
+    const teamScopedNodes = assignedNodes.filter((node) =>
+      (node.teams?.nodes || []).some((t) => teamKeys.includes(t.key))
+    );
+    console.log(
+      `  ✓ ${teamScopedNodes.length} assigned ${teamKeys.join("/")} projects ` +
+        `(lead or member, all states; ${assignedNodes.length} assigned overall)`
+    );
+    assignedProjects = teamScopedNodes
+      .map(toAssignedProjectRecord)
+      .sort((a, b) => a.Name.localeCompare(b.Name));
+  }
 
   // Local team cache: roster-assigned issues + the viewer's recent issue
   // comments. Fetched before any Notion write so a cache failure fails the
   // whole run loudly rather than leaving a fresh Notion / stale cache split.
-  const rosterNodes = await linear.getIssuesAssignedToEmails(
-    rosterEmails,
-    completedCutoff
-  );
-  console.log(
-    `  ✓ ${rosterNodes.length} team-roster issues (${rosterEmails.length} members, ` +
-      `completed kept ${COMPLETED_WINDOW_DAYS} days back)`
-  );
-
-  const commentCutoff = new Date(
-    Date.now() - COMMENT_WINDOW_DAYS * 24 * 60 * 60 * 1000
-  ).toISOString();
-  const commentNodes = (await linear.getMyRecentComments(commentCutoff)).filter(
-    (node) => node.issue
-  );
-  console.log(
-    `  ✓ ${commentNodes.length} of my issue comments (last ${COMMENT_WINDOW_DAYS} days)`
-  );
-
-  const teamIssues = rosterNodes
-    .map((node) => toTeamIssueRecord(node, weeks))
-    .sort(
-      (a, b) =>
-        a.Assignee.localeCompare(b.Assignee) ||
-        a.Identifier.localeCompare(b.Identifier)
+  // Skipped under --tasks-only.
+  let teamIssues = [];
+  let myComments = [];
+  let teamCache = null;
+  if (!TASKS_ONLY) {
+    const rosterNodes = await linear.getIssuesAssignedToEmails(
+      rosterEmails,
+      completedCutoff
     );
-  const myComments = commentNodes
-    .map((node) => toCommentRecord(node, weeks))
-    .sort((a, b) => b.Date.localeCompare(a.Date));
-  const teamCache = {
-    _meta: {
-      pulledAt: new Date().toISOString(),
-      roster: rosterEmails,
-      completedWindowDays: COMPLETED_WINDOW_DAYS,
-      commentWindowDays: COMMENT_WINDOW_DAYS,
-    },
-    teamIssues,
-    myComments,
-  };
+    console.log(
+      `  ✓ ${rosterNodes.length} team-roster issues (${rosterEmails.length} members, ` +
+        `completed kept ${COMPLETED_WINDOW_DAYS} days back)`
+    );
+
+    const commentCutoff = new Date(
+      Date.now() - COMMENT_WINDOW_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString();
+    const commentNodes = (
+      await linear.getMyRecentComments(commentCutoff)
+    ).filter((node) => node.issue);
+    console.log(
+      `  ✓ ${commentNodes.length} of my issue comments (last ${COMMENT_WINDOW_DAYS} days)`
+    );
+
+    teamIssues = rosterNodes
+      .map((node) => toTeamIssueRecord(node, weeks))
+      .sort(
+        (a, b) =>
+          a.Assignee.localeCompare(b.Assignee) ||
+          a.Identifier.localeCompare(b.Identifier)
+      );
+    myComments = commentNodes
+      .map((node) => toCommentRecord(node, weeks))
+      .sort((a, b) => b.Date.localeCompare(a.Date));
+    teamCache = {
+      _meta: {
+        pulledAt: new Date().toISOString(),
+        roster: rosterEmails,
+        completedWindowDays: COMPLETED_WINDOW_DAYS,
+        commentWindowDays: COMMENT_WINDOW_DAYS,
+      },
+      teamIssues,
+      myComments,
+    };
+  }
 
   const tasks = issues.map((node) => toTaskRecord(node, weeks));
   // Dated first (soonest due at top), then undated; Identifier breaks ties.
@@ -322,28 +344,32 @@ async function main() {
         `${sync.gone} gone, ${sync.unchanged} unchanged`
     );
     for (const action of sync.actions) console.log(`  ${action}`);
-    const projectSync = await syncLinearProjects(assignedProjects, {
-      dryRun: true,
-    });
-    console.log(
-      `\n[dry-run] projects plan: ${projectSync.created} create, ` +
-        `${projectSync.updated} update, ${projectSync.gone} gone, ` +
-        `${projectSync.unchanged} unchanged`
-    );
-    for (const action of projectSync.actions) console.log(`  ${action}`);
-    console.log(
-      `\n[dry-run] team cache plan: ${teamIssues.length} issues, ` +
-        `${myComments.length} comments → ${TEAM_CACHE_FILE}`
-    );
+    if (!TASKS_ONLY) {
+      const projectSync = await syncLinearProjects(assignedProjects, {
+        dryRun: true,
+      });
+      console.log(
+        `\n[dry-run] projects plan: ${projectSync.created} create, ` +
+          `${projectSync.updated} update, ${projectSync.gone} gone, ` +
+          `${projectSync.unchanged} unchanged`
+      );
+      for (const action of projectSync.actions) console.log(`  ${action}`);
+      console.log(
+        `\n[dry-run] team cache plan: ${teamIssues.length} issues, ` +
+          `${myComments.length} comments → ${TEAM_CACHE_FILE}`
+      );
+    }
     console.log("\n[dry-run] nothing written (no Notion, no local JSON, no heartbeat)");
     return;
   }
 
-  fs.writeFileSync(TEAM_CACHE_FILE, JSON.stringify(teamCache, null, 2));
-  console.log(
-    `✅ data/linearTeam.json written (${teamIssues.length} team issues, ` +
-      `${myComments.length} of my comments)`
-  );
+  if (!TASKS_ONLY) {
+    fs.writeFileSync(TEAM_CACHE_FILE, JSON.stringify(teamCache, null, 2));
+    console.log(
+      `✅ data/linearTeam.json written (${teamIssues.length} team issues, ` +
+        `${myComments.length} of my comments)`
+    );
+  }
 
   // Linear → Notion: upsert issues into the shared 2026 Tasks DB so Notion
   // is the one holistic layer for phone-side retro/planning. Upsert on
@@ -353,6 +379,11 @@ async function main() {
     `✅ Notion 2026 Tasks synced (${sync.created} created, ${sync.updated} updated, ` +
       `${sync.gone} marked gone, ${sync.unchanged} unchanged)`
   );
+
+  if (TASKS_ONLY) {
+    console.log("[tasks-only] skipped: projects sync, team cache, heartbeat");
+    return;
+  }
 
   const projectSync = await syncLinearProjects(assignedProjects);
   console.log(
