@@ -443,7 +443,8 @@ async function main() {
   let sections;
 
   if (autoMode) {
-    sections = ["plan", "collected", "summaries", "calendar", "nyc", "retro", "life"];
+    // "nyc" removed for now — Museums DB not shared with the BrickBot integration (object_not_found)
+    sections = ["plan", "collected", "summaries", "calendar", "retro", "life"];
   } else {
     const answer = await inquirer.prompt([
       {
@@ -455,7 +456,7 @@ async function main() {
           { name: "Collected data", value: "collected", checked: true },
           { name: "Summaries & Recaps", value: "summaries", checked: true },
           { name: "Calendar events", value: "calendar", checked: true },
-          { name: "NYC data", value: "nyc", checked: true },
+          { name: "NYC data", value: "nyc", checked: false },
           { name: "Retro data", value: "retro", checked: true },
           { name: "Life data", value: "life", checked: true },
         ],

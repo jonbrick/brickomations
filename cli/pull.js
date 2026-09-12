@@ -1098,7 +1098,8 @@ async function main() {
     // next week — present. A short forward window silently drops the back half
     // of the current week from calendar.json, because the fetch cutoff lands
     // mid-week (this is what +14 fixes; +3 only reached ~Thursday).
-    sections = ["plan", "collected", "summaries", "calendar", "nyc", "retro", "life"];
+    // "nyc" removed for now — Museums DB not shared with the BrickBot integration (object_not_found)
+    sections = ["plan", "collected", "summaries", "calendar", "retro", "life"];
     endDate = new Date();
     endDate.setDate(endDate.getDate() + 14);
     endDate.setHours(23, 59, 59, 999);
@@ -1117,7 +1118,7 @@ async function main() {
           { name: "Collected data (Oura, Strava, GitHub, Steam, Withings)", value: "collected", checked: true },
           { name: "Summaries & Recaps", value: "summaries", checked: true },
           { name: "Calendar events", value: "calendar", checked: true },
-          { name: "NYC (Museums, Restaurants, Tattoos, Venues)", value: "nyc", checked: true },
+          { name: "NYC (Museums, Restaurants, Tattoos, Venues)", value: "nyc", checked: false },
           { name: "Retro data (Personal & Work Week Retros)", value: "retro", checked: true },
           { name: "Life data (Goals, Themes, Relationships, Tasks, Habits, Monthly Plans)", value: "life", checked: true },
         ],
