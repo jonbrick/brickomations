@@ -9,7 +9,7 @@
     "pull": "node cli/pull.js",
     "pull:linear": "node cli/pull-linear.js",
     "linear:tasks": "node cli/pull-linear.js --tasks-only",
-    "morning": "yarn collect --auto && yarn update --auto --external-only",
+    "morning": "yarn tokens:refresh --auto; yarn collect --auto; yarn update --auto --external-only",
     "push": "node cli/push.js",
     "vault-sync": "node cli/vault-sync.js",
     "view": "node cli/view.js",
