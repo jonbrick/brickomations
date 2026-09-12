@@ -14,9 +14,10 @@ silently no-ops.
 
 ```
 cd ~/projects/brickomations && yarn morning
-                            # external sources → Notion + their calendars.
-                            # ±3 days. skips meds/supps/events/trips (the
-                            # slow full-DB legs). no prompts
+                            # token refresh, then external sources →
+                            # Notion + their calendars. ±3 days. skips
+                            # meds/supps/events/trips (the slow full-DB
+                            # legs). legs run independently (;). no prompts
 
 cd ~/projects/brickomations && yarn linear:tasks
                             # assigned issues → Notion 2026 Tasks. skips
