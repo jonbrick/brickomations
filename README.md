@@ -381,9 +381,9 @@ STEAM_URL=https://your-lambda-url.lambda-url.region.on.aws
 **Setup**:
 
 1. Go to [Withings Developer Portal](https://developer.withings.com/)
-2. Create a new application
+2. Create a new application — **one per machine** (e.g. `Brickomations (Mac mini)`, `Brickomations (MacBook)`). Withings refresh tokens are single-use: every refresh invalidates the old token, so two machines sharing one app rotate the chain out from under each other and the second machine dies with `Refresh token expired or revoked`.
 3. Set redirect URI to `http://localhost:3000/callback`
-4. Copy Client ID and Client Secret
+4. Copy Client ID and Client Secret (this machine's app)
 5. Add to `.env`:
    ```bash
    WITHINGS_CLIENT_ID=xxxxxxxxxxxxx
@@ -395,7 +395,7 @@ STEAM_URL=https://your-lambda-url.lambda-url.region.on.aws
    ```
    Select "Withings" and follow prompts
 
-**Note**: Withings integration is currently display-only. Data fetching works, but automatic sync to Notion and Calendar workflows are not yet implemented. You can view measurements in the CLI but they won't be saved to Notion.
+**Note**: Withings syncs end-to-end — body weight flows to Notion via `yarn collect` and to Calendar via `yarn update`, same as the other sources.
 
 #### Claude AI
 
