@@ -16,6 +16,7 @@ class BaseWorkflow {
   static async syncBatch(items, syncSingleFn, rateLimitMs = null, options = {}) {
     const results = {
       created: [],
+      updated: [],
       skipped: [],
       errors: [],
       total: items.length,
@@ -27,9 +28,11 @@ class BaseWorkflow {
     for (const item of items) {
       try {
         const result = await syncSingleFn(item);
-        
+
         if (result.skipped) {
           results.skipped.push(result);
+        } else if (result.updated) {
+          results.updated.push(result);
         } else {
           results.created.push(result);
         }
@@ -59,7 +62,10 @@ class BaseWorkflow {
    * @param {Function} transformFn - Function to transform item to Notion properties
    * @param {string} databaseId - Notion database ID
    * @param {Function} formatResultFn - Function to format result object
-   * @param {Object} options - Options
+   * @param {Object} options - Options. `options.updateExisting` opts an
+   *   integration into upsert: (item, existing, repository) => truthy when it
+   *   rewrote the page, falsy to leave it alone. Sources whose data is settled
+   *   once published omit it and keep the create-or-skip default.
    * @returns {Promise<Object>} Results object
    */
   static async syncToNotion(
@@ -76,6 +82,17 @@ class BaseWorkflow {
       const existing = await findExistingFn(item, repository);
 
       if (existing) {
+        if (typeof options.updateExisting === "function") {
+          const update = await options.updateExisting(item, existing, repository);
+          if (update) {
+            return formatResultFn(item, {
+              skipped: false,
+              updated: true,
+              pageId: existing.id,
+              ...(typeof update === "object" ? update : {}),
+            });
+          }
+        }
         return formatResultFn(item, { skipped: true, existingPageId: existing.id });
       }
 
