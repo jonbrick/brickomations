@@ -18,7 +18,7 @@ const WORK_TASK_CATEGORY_MAPPING = {
   "💡 Exploration": "exploration",
   "🔎 QA": "qa",
   "⚠️ Critique": "critique",
-  "🤝 Hiring": "hiring",
+  "🤝 Hiring & Team": "hiring",
   "💼 Admin": "workAdmin",
 };
 
