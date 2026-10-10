@@ -7,10 +7,10 @@ Every command line is paste-safe from ANY directory: triple-click, paste,
 enter — the cd is built in, and the shell ignores the # description.
 
 ALL FLAGS ARE EQUALS-FORM ONLY: --date=YYYY-MM-DD, --from=YYYY-MM-DD
---to=YYYY-MM-DD, --source=oura. Space-separated (--from 2026-01-01)
-silently no-ops.
+--to=YYYY-MM-DD, --days=8, --source=oura. Space-separated
+(--from 2026-01-01) silently no-ops.
 
-## The two I paste
+## The three I paste
 
 ```
 cd ~/projects/brickomations && yarn morning
@@ -19,14 +19,21 @@ cd ~/projects/brickomations && yarn morning
                             # meds/supps/events/trips (the slow full-DB
                             # legs). legs run independently (;). no prompts
 
-cd ~/projects/brickomations && yarn linear:tasks
-                            # assigned issues → Notion 2026 Tasks. skips
+cd ~/projects/brickomations && yarn linear:week
+                            # my open issues + anything settled in the
+                            # last 8 days → Notion 2026 Tasks. skips
                             # projects sync, team cache, heartbeat — safe
                             # from the MacBook. no prompts
+
+cd ~/projects/brickomations && yarn linear:range --from=2026-09-21 --to=2026-09-28
+                            # same, settled window = that date range
+                            # (--date=X for one day). bare = 21 days.
+                            # no prompts
 ```
 
-Faster still: the shell aliases `morning` and `linear:tasks` run these
-from any directory (defined in ~/.zshrc, per machine).
+Faster still: the shell aliases `morning`, `linear-week` and
+`linear-range` run these from any directory (defined in ~/.zshrc, per
+machine).
 
 ## Daily — small stuff (health, hobbies, calendars)
 
@@ -82,7 +89,9 @@ cd ~/projects/brickomations && yarn pull:linear
                             # AND → local data/linearTeam.json (design-team
                             # roster issues + my recent comments).
                             # --dry-run previews; --tasks-only is the
-                            # issues-only leg behind yarn linear:tasks.
+                            # issues-only leg behind linear:week /
+                            # linear:range; --days= / --from= --to= set
+                            # the settled window (default 21 days).
                             # no prompts
 
 cd ~/projects/brickomations && yarn push --auto
