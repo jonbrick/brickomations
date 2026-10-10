@@ -24,16 +24,26 @@
  * has succeeded; any error pings the heartbeat as failed and exits 1.
  *
  * Usage: yarn pull:linear [--dry-run] [--tasks-only]
+ *                         [--days=N | --from=YYYY-MM-DD --to=YYYY-MM-DD | --date=YYYY-MM-DD]
  *
  * --dry-run reads Linear and Notion, prints the would-be Notion actions
  * (creates/updates/gone), and writes nothing — no Notion writes, no
  * heartbeat ping.
  *
- * --tasks-only (yarn linear:tasks) runs just the assigned-issues → Notion
- * 2026 Tasks leg: no projects sync, no team-roster/comments fetch, no
- * data/linearTeam.json write (iCloud-safe from the MacBook), and no
- * heartbeat ping — the pull-linear heartbeat attests the full scheduled
- * job, and a partial manual run must not vouch for legs it skipped.
+ * --tasks-only runs just the assigned-issues → Notion 2026 Tasks leg: no
+ * projects sync, no team-roster/comments fetch, no data/linearTeam.json
+ * write (iCloud-safe from the MacBook), and no heartbeat ping — the
+ * pull-linear heartbeat attests the full scheduled job, and a partial
+ * manual run must not vouch for legs it skipped. Behind yarn linear:week
+ * (--days=8) and yarn linear:range (append --from=/--to=).
+ *
+ * Settled window — which completed / canceled issues come along (open
+ * issues always do, so the Notion gone-pass stays safe at any width):
+ *   default        last 21 days (the scheduled job)
+ *   --days=N       last N days
+ *   --from/--to    settled inside that date range (equals-form, like
+ *                  every other date-aware CLI); --date=X is --from=X --to=X
+ * --days and --from/--to are mutually exclusive.
  *
  * @layer 1 - Integration (CLI)
  */
@@ -48,6 +58,7 @@ const {
   syncLinearProjects,
 } = require("../src/workflows/linear-to-notion-projects");
 const { readFileSyncRetry } = require("../src/utils/fs-retry");
+const { parseDateRangeFromArgv } = require("../src/utils/cli");
 
 const REPO_ROOT = path.join(__dirname, "..");
 const DATA_DIR = path.join(REPO_ROOT, "data");
@@ -66,6 +77,45 @@ const TEAM_CACHE_FILE = path.join(DATA_DIR, "linearTeam.json");
 // hung API call must not hold the mini awake. A handful of GraphQL pages
 // takes seconds; 3 minutes is the same per-step budget yarn sync uses.
 const WALL_CLOCK_TIMEOUT_MS = 3 * 60 * 1000;
+
+// --- Settled window ---
+
+/**
+ * Resolve the settled-issue window from argv: --days=N, --from/--to
+ * (--date shorthand), or the 21-day default. Returns ISO bounds for the
+ * Linear filter (`to` null = open-ended) plus a label for the log line.
+ * Bad or mixed flags throw — fail loud, same as every other CLI here.
+ */
+function resolveSettledWindow(argv) {
+  const daysArg = argv.find((a) => a.startsWith("--days="));
+  const { range, error } = parseDateRangeFromArgv(argv);
+  if (error) throw new Error(error);
+  if (daysArg && range) {
+    throw new Error("Cannot combine --days with --from/--to/--date. Use one or the other.");
+  }
+
+  if (range) {
+    return {
+      from: range.fromDate.toISOString(),
+      to: range.toDate.toISOString(),
+      label: `settled ${range.from} → ${range.to}`,
+    };
+  }
+
+  let days = COMPLETED_WINDOW_DAYS;
+  if (daysArg) {
+    const raw = daysArg.slice("--days=".length);
+    days = Number(raw);
+    if (!Number.isInteger(days) || days < 1) {
+      throw new Error(`Invalid --days value: "${raw}". Expected a positive integer.`);
+    }
+  }
+  return {
+    from: new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(),
+    to: null,
+    label: `settled kept ${days} days back`,
+  };
+}
 
 // --- Heartbeat ---
 
@@ -254,13 +304,9 @@ async function main() {
   const viewer = await linear.getViewer();
   console.log(`  ✓ authenticated as ${viewer.name}`);
 
-  const completedCutoff = new Date(
-    Date.now() - COMPLETED_WINDOW_DAYS * 24 * 60 * 60 * 1000
-  ).toISOString();
-  const issues = await linear.getAssignedIssues(completedCutoff);
-  console.log(
-    `  ✓ ${issues.length} assigned issues (completed kept ${COMPLETED_WINDOW_DAYS} days back)`
-  );
+  const settledWindow = resolveSettledWindow(process.argv);
+  const issues = await linear.getAssignedIssues(settledWindow);
+  console.log(`  ✓ ${issues.length} assigned issues (${settledWindow.label})`);
 
   // The projects leg pulls by assignment (lead or member), all states,
   // scoped to the configured teams — cross-team projects Jon is merely
@@ -290,11 +336,11 @@ async function main() {
   if (!TASKS_ONLY) {
     const rosterNodes = await linear.getIssuesAssignedToEmails(
       rosterEmails,
-      completedCutoff
+      settledWindow
     );
     console.log(
       `  ✓ ${rosterNodes.length} team-roster issues (${rosterEmails.length} members, ` +
-        `completed kept ${COMPLETED_WINDOW_DAYS} days back)`
+        `${settledWindow.label})`
     );
 
     const commentCutoff = new Date(
@@ -321,7 +367,7 @@ async function main() {
       _meta: {
         pulledAt: new Date().toISOString(),
         roster: rosterEmails,
-        completedWindowDays: COMPLETED_WINDOW_DAYS,
+        settledWindow: { from: settledWindow.from, to: settledWindow.to },
         commentWindowDays: COMMENT_WINDOW_DAYS,
       },
       teamIssues,

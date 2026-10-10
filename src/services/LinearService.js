@@ -12,6 +12,23 @@ const axios = require("axios");
 
 const PAGE_SIZE = 100;
 
+/**
+ * Issue filter for a settled-issue window: open issues always pass;
+ * completed / canceled issues only when they settled inside
+ * `{ from, to }` (ISO datetimes; `to` null = open-ended to now).
+ * Shared by every assigned-issue query so "the window" means one thing.
+ */
+function settledWindowFilter({ from, to }) {
+  const inWindow = to ? { gt: from, lt: to } : { gt: from };
+  return {
+    or: [
+      { and: [{ completedAt: { null: true } }, { canceledAt: { null: true } }] },
+      { completedAt: inWindow },
+      { canceledAt: inWindow },
+    ],
+  };
+}
+
 class LinearService {
   constructor() {
     this.apiKey = process.env.LINEAR_API_KEY;
@@ -178,19 +195,13 @@ class LinearService {
 
   /**
    * Issues assigned to any of the given member emails — any team, every
-   * state, completed/canceled kept only within the cutoff window (same
-   * window semantics as getAssignedIssues). One query per member: the
-   * roster is small and per-member filters stay trivial. Slim nodes for
-   * the local team cache — no description (bulk) and no sync fields.
+   * state, completed/canceled kept only within the settled window (same
+   * semantics as getAssignedIssues). One query per member: the roster is
+   * small and per-member filters stay trivial. Slim nodes for the local
+   * team cache — no description (bulk) and no sync fields.
    */
-  async getIssuesAssignedToEmails(emails, completedCutoff) {
-    const stateFilter = {
-      or: [
-        { and: [{ completedAt: { null: true } }, { canceledAt: { null: true } }] },
-        { completedAt: { gt: completedCutoff } },
-        { canceledAt: { gt: completedCutoff } },
-      ],
-    };
+  async getIssuesAssignedToEmails(emails, settledWindow) {
+    const stateFilter = settledWindowFilter(settledWindow);
 
     const nodes = [];
     for (const email of emails) {
@@ -281,18 +292,13 @@ class LinearService {
 
   /**
    * Issues assigned to the authenticated user, any team, every state.
-   * Completed and canceled issues only within the given cutoff window (ISO
-   * datetime) — older ones fall out of the cache. Canceled issues are kept
-   * so the Notion sync can mark them 🛑 Canceled rather than 🫥 Gone.
+   * Completed and canceled issues only within the settled window
+   * (`{ from, to }` ISO datetimes) — others fall out of the pull. Canceled
+   * issues are kept so the Notion sync can mark them 🛑 Canceled rather
+   * than 🫥 Gone.
    */
-  async getAssignedIssues(completedCutoff) {
-    const filter = {
-      or: [
-        { and: [{ completedAt: { null: true } }, { canceledAt: { null: true } }] },
-        { completedAt: { gt: completedCutoff } },
-        { canceledAt: { gt: completedCutoff } },
-      ],
-    };
+  async getAssignedIssues(settledWindow) {
+    const filter = settledWindowFilter(settledWindow);
 
     const nodes = [];
     let after = null;
