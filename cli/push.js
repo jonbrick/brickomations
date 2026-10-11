@@ -139,6 +139,14 @@ function buildPropertiesFromRecord(record) {
       continue;
     }
 
+    // Pre-format url types — the life-data config keys (e.g. "tasks") don't all
+    // map to a static config, so _formatProperties can't detect url props and
+    // falls back to rich_text, which Notion rejects with "X is expected to be url."
+    if (type === "url") {
+      properties[key] = { url: value || null };
+      continue;
+    }
+
     properties[key] = value;
   }
 
