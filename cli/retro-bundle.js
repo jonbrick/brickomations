@@ -49,6 +49,27 @@ function loadJson(name) {
   return require(path.join(__dirname, "..", "data", name));
 }
 
+// Day-level health logs (collected.json). Keep only the fields Beat 9 reads —
+// the raw rows carry relation-ID arrays, formula strings and "⬇️" divider
+// columns that bury the checkboxes past any terminal's output cutoff.
+const MEDS_FIELDS = ["Date", "AM Meds", "PM Meds", "No Meds"];
+const SUPPS_FIELDS = [
+  "Date",
+  "AM Supps",
+  "PM Supps",
+  "No Supps",
+  "AM Skipped",
+  "PM Skipped",
+];
+
+function healthRowsForWeek(rows, fields, start, end) {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .filter((r) => inRange(r.Date, start, end))
+    .sort((a, b) => (a.Date < b.Date ? -1 : a.Date > b.Date ? 1 : 0))
+    .map((r) => Object.fromEntries(fields.map((f) => [f, r[f] ?? null])));
+}
+
 function main() {
   const wkArg = process.argv[2];
   const wk = Number.parseInt(wkArg, 10);
@@ -64,6 +85,7 @@ function main() {
   const retro = loadJson("retro.json");
   const life = loadJson("life.json");
   const journal = loadJson("journal.json");
+  const collected = loadJson("collected.json");
 
   // plan.json week titles are zero-padded ("Week 08")
   const weekTitle = `Week ${String(wk).padStart(2, "0")}`;
@@ -110,6 +132,18 @@ function main() {
   const journalEntries = (journal.entries || []).filter((e) =>
     inRange(e.date, start, end)
   );
+  const medications = healthRowsForWeek(
+    collected.medications,
+    MEDS_FIELDS,
+    start,
+    end
+  );
+  const supplements = healthRowsForWeek(
+    collected.supplements,
+    SUPPS_FIELDS,
+    start,
+    end
+  );
 
   const bundle = {
     week: {
@@ -137,6 +171,8 @@ function main() {
     workPlan,
     tasks,
     journal: journalEntries,
+    medications,
+    supplements,
   };
 
   process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
