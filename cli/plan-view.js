@@ -17,6 +17,7 @@
 const fs = require("fs");
 const path = require("path");
 const { buildBundle } = require("./plan-bundle");
+const { portfolioLines } = require("./render-portfolio");
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
@@ -186,8 +187,18 @@ function render(b) {
   P(`  data pulled ${b.dataPulledAt || "?"}   ·   today ${today}`);
   P(RULE);
 
+  // ---------- PORTFOLIO ----------
+  // Leads the render: /plan-week Beat 1 (rocks + big to-dos) chooses forward
+  // against goals, projects, and the backlog before the calendar enters.
+  P("");
+  for (const ln of portfolioLines(b.inputs, {
+    subtitle: "(goals · projects · backlog · work state — Beat 1 reads this first)",
+  }))
+    P(ln);
+
   // ---------- DAY BY DAY ----------
   P("");
+  P(RULE);
   P(
     "DAY BY DAY   (personal + work calendars · events/trips · ⛔ = DNS/hold · [x] = working loc)"
   );
