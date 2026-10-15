@@ -200,6 +200,48 @@ function loadJson(name) {
   return require(path.join(__dirname, "..", "data", name));
 }
 
+// Task statuses that mean "off the board" — settled in Notion or dropped from
+// Linear. Anything else is open.
+const SETTLED = new Set(["🟢 Done", "🛑 Canceled", "🫥 Gone"]);
+const PROJECTS_RELATION = "💎 2026 Projects";
+
+// Open-task count per project id, from the tasks' project relation. Notion's
+// `Open Tasks` formula is a rendered string (and null on work rows), so the
+// count is derived here instead of parsed.
+function openTaskCounts(life) {
+  const counts = new Map();
+  for (const t of life.tasks || []) {
+    if (SETTLED.has(t.Status)) continue;
+    for (const id of t[PROJECTS_RELATION] || []) {
+      counts.set(id, (counts.get(id) || 0) + 1);
+    }
+  }
+  return counts;
+}
+
+// Personal tasks with no Due Date and not settled, grouped by project — the
+// pool /plan-week Beat 1 pulls from. Work tickets ride `workTickets` instead.
+function undatedBacklog(life) {
+  const nameById = new Map(
+    (life.personalProjects || []).map((p) => [p._notionId, p.Project])
+  );
+  const groups = new Map();
+  for (const t of life.tasks || []) {
+    if (t.Category === "💼 Work") continue;
+    if (t["Due Date"]) continue;
+    if (SETTLED.has(t.Status)) continue;
+    const rel = Array.isArray(t[PROJECTS_RELATION]) ? t[PROJECTS_RELATION] : [];
+    const project = rel.length
+      ? nameById.get(rel[0]) || "(unknown project)"
+      : "(no project)";
+    if (!groups.has(project)) groups.set(project, []);
+    groups.get(project).push(t.Task);
+  }
+  return [...groups.entries()]
+    .map(([project, tasks]) => ({ project, count: tasks.length, tasks }))
+    .sort((a, b) => b.count - a.count || a.project.localeCompare(b.project));
+}
+
 function buildBundle(wk) {
   const plan = loadJson("plan.json");
   const life = loadJson("life.json");
@@ -216,6 +258,11 @@ function buildBundle(wk) {
   const workTaskRows = (life.tasks || []).filter(
     (t) => t.Category === "💼 Work"
   );
+  const openCounts = openTaskCounts(life);
+  const withOpenCount = (p) => ({
+    ...stripKeepId(p),
+    openTaskCount: openCounts.get(p._notionId) || 0,
+  });
 
   // plan.json week titles are zero-padded ("Week 08"); life.json task
   // "Week Number" values are not ("Week 8"). Different keys per file.
@@ -355,14 +402,17 @@ function buildBundle(wk) {
         .map(stripKeepId),
       personalProjects: (life.personalProjects || [])
         .filter((p) => p.Category !== "💼 Work" && p.Status !== "🟢 Done")
-        .map(stripKeepId),
+        .map(withOpenCount),
+      // Undated, unsettled personal tasks grouped by project — Beat 1's pull
+      // pool (a pulled item gets a Due Date and leaves this list).
+      undatedBacklog: undatedBacklog(life),
       // Active work projects only — 🔵 Doing + 🔴 To Do, the Notion
       // equivalent of the started/planned states the old Linear cache held.
       workProjects: {
         pulledAt: life._meta ? life._meta.pulledAt : null,
         projects: workProjectRows
           .filter((p) => p.Status === "🔵 Doing" || p.Status === "🔴 To Do")
-          .map(stripKeepId),
+          .map(withOpenCount),
       },
       // The week's Linear tickets: due in span (done ones included, so the
       // plan doesn't double-book) plus undated ones still open — i.e. not
@@ -373,8 +423,7 @@ function buildBundle(wk) {
           .filter(
             (t) =>
               inRange(t["Due Date"], start, end) ||
-              (!t["Due Date"] &&
-                !["🟢 Done", "🛑 Canceled", "🫥 Gone"].includes(t.Status))
+              (!t["Due Date"] && !SETTLED.has(t.Status))
           )
           .map(stripKeepId),
       },
@@ -436,7 +485,23 @@ function main() {
   }
 }
 
-module.exports = { buildBundle };
+// Helpers are shared with month-bundle.js so the two bundles join and strip
+// the same way.
+module.exports = {
+  buildBundle,
+  strip,
+  stripKeepId,
+  joinByWeek,
+  inRange,
+  addDays,
+  loadJson,
+  upcomingEventsTrips,
+  openTaskCounts,
+  undatedBacklog,
+  SETTLED,
+  WEEKS_RELATION,
+  MONTHS_RELATION,
+};
 
 if (require.main === module) {
   main();

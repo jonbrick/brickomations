@@ -28,6 +28,8 @@
     "retro:bundle": "node cli/retro-bundle.js",
     "plan:bundle": "node cli/plan-bundle.js",
     "plan:view": "node cli/plan-view.js",
+    "month:bundle": "node cli/month-bundle.js",
+    "month:view": "node cli/month-view.js",
     "generate": "node cli/generate-year.js",
     "tokens:check": "node cli/tokens/check.js",
     "tokens:refresh": "node cli/tokens/refresh.js",

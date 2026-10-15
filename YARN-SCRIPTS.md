@@ -114,6 +114,16 @@ cd ~/projects/brickomations && yarn retro:bundle <N>
 cd ~/projects/brickomations && yarn plan:bundle <N>
                             # week N planning bundle
 
+cd ~/projects/brickomations && yarn --silent plan:view <N>
+                            # week N planning render (PORTFOLIO first, then
+                            # day-by-day); stages local/plan/bundle-<N>.json
+
+cd ~/projects/brickomations && yarn --silent month:view <MM>
+                            # month MM planning render (prior month plan vs
+                            # recap, PORTFOLIO, weeks, events/trips); stages
+                            # local/plan/month-bundle-<MM>.json. month:bundle
+                            # <MM> emits the JSON alone
+
 cd ~/projects/brickomations && node scripts/retro-weeks.js personal
                             # which weeks still need retro work (arg:
                             # personal or work)
