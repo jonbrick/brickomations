@@ -184,6 +184,8 @@ function render(b) {
 
   P(RULE);
   P(`  ${b.week.title}  ·  ${pretty(b.week.start)} – ${pretty(b.week.end)}`);
+  if (b.week.planEnd && b.week.planEnd > b.week.end)
+    P(`  plan span runs to ${pretty(b.week.planEnd)} — next week's Sunday, planned here at day grain`);
   P(`  data pulled ${b.dataPulledAt || "?"}   ·   today ${today}`);
   P(RULE);
 
@@ -202,6 +204,7 @@ function render(b) {
   P(
     "DAY BY DAY   (personal + work calendars · events/trips · ⛔ = DNS/hold · [x] = working loc)"
   );
+  const planEnd = b.week.planEnd || b.week.end;
   const pers = b.calendarBlocks.personal || [];
   const work = b.calendarBlocks.work || [];
   // Events/trips are Notion-born and pushed OUT to the 🎟️/✈️ calendars — never
@@ -220,12 +223,14 @@ function render(b) {
       const { s, e } = tripSpan(t);
       return s && day >= s && day <= e;
     });
-  for (const day of eachDay(b.week.start, b.week.end)) {
+  for (const day of eachDay(b.week.start, planEnd)) {
     const onDay = (arr) => arr.filter((e) => ymd(e.start) === day);
     const wl = [
       ...new Set(onDay(work).filter(isWorkingLoc).map((e) => e.summary.trim())),
     ];
-    const when = day < today ? " · past" : day === today ? " · TODAY" : "";
+    const when =
+      (day < today ? " · past" : day === today ? " · TODAY" : "") +
+      (day > b.week.end ? " · NEXT WEEK" : "");
     const wlTag = wl.length ? `   [${wl.join("/")}]` : "";
     P("");
     P(`  ${pretty(day)}${when}${wlTag}`);

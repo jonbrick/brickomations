@@ -116,7 +116,9 @@ cd ~/projects/brickomations && yarn plan:bundle <N>
 
 cd ~/projects/brickomations && yarn --silent plan:view <N>
                             # week N planning render (PORTFOLIO first, then
-                            # day-by-day); stages local/plan/bundle-<N>.json
+                            # day-by-day Sun → next Sun — 8 days, the extra
+                            # Sunday tagged NEXT WEEK); stages
+                            # local/plan/bundle-<N>.json
 
 cd ~/projects/brickomations && yarn --silent month:view <MM>
                             # month MM planning render (prior month plan vs

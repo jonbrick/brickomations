@@ -6,6 +6,10 @@
  * needs for the given week. Read-only against data/*.json — safe on
  * either machine (no writes, no iCloud race).
  *
+ * Span: the Notion week is Sun–Sat; day-grain reads (calendar, tasks,
+ * events/trips, planned blocks) run to `week.planEnd` = next Sunday, so
+ * each week's plan also places the Sunday the next one is made on.
+ *
  * Mirrors cli/retro-bundle.js conventions (joinByWeek via the Weeks
  * relation, plumbing-key stripping, fail loud, --silent stdout JSON).
  *
@@ -28,8 +32,15 @@ const PLUMBING_KEYS = new Set([
 const WEEKS_RELATION = "⏰ 2026 Weeks";
 const MONTHS_RELATION = "🗓️ 2026 Months";
 
-// Forward-lookahead window for events/trips past the target week (3 weeks).
+// Forward-lookahead window for events/trips past the plan span (3 weeks).
 const LOOKAHEAD_DAYS = 21;
+
+// The plan span runs one day past the Notion week: Sun → next Sun (8 days).
+// Planning day is also day 1 of the week, so the Sunday the plan is made on
+// is the one day no session covered — each week plans the next Sunday at day
+// grain (calendar, tasks, habit cells). Week-level things (rocks, lanes, habit
+// numbers, actuals) stay Sun–Sat; only the day-grain reads reach planEnd.
+const PLAN_OVERHANG_DAYS = 1;
 
 // Day math on YYYY-MM-DD strings (UTC — no timezone drift).
 function addDays(ymd, n) {
@@ -64,8 +75,12 @@ function joinByWeek(records, weekNotionId) {
   );
 }
 
+// Date values may carry a time ("2026-10-18T13:00:00.000-04:00"); compare
+// the day only, or a timed value on the span's last day falls out.
 function inRange(dateStr, start, end) {
-  return typeof dateStr === "string" && dateStr >= start && dateStr <= end;
+  if (typeof dateStr !== "string") return false;
+  const day = dateStr.slice(0, 10);
+  return day >= start && day <= end;
 }
 
 // Calendar event starts are ISO datetimes with TZ offset (timed) or
@@ -280,13 +295,15 @@ function buildBundle(wk) {
       `week "${weekTitle}" missing Date Range (SET) / Date Range (SET) End`
     );
   }
+  const planEnd = addDays(end, PLAN_OVERHANG_DAYS);
 
   // --- Tasks: Week Number is the clean key (string "Week 28"); union with
-  // Due Date range for tasks that carry a date but no week relation.
+  // Due Date range over the plan span (so next Sunday's tasks show and the
+  // plan doesn't double-book them).
   const seenTasks = new Set();
   const weekTasks = (life.tasks || []).filter((t) => {
     const match =
-      t["Week Number"] === taskWeekKey || inRange(t["Due Date"], start, end);
+      t["Week Number"] === taskWeekKey || inRange(t["Due Date"], start, planEnd);
     if (!match || seenTasks.has(t._notionId)) return false;
     seenTasks.add(t._notionId);
     return true;
@@ -298,37 +315,47 @@ function buildBundle(wk) {
     else tasks.other.push(strip(t));
   }
 
-  // --- Calendar blocks, both sides (constraints are side-agnostic).
+  // --- Calendar blocks, both sides (constraints are side-agnostic). Plan span.
   const calendarBlocks = {
     personal: (calendar.personalCalendar || [])
-      .filter((e) => calEventInSpan(e, start, end))
+      .filter((e) => calEventInSpan(e, start, planEnd))
       .map(calSlim),
     work: (calendar.workCalendar || [])
-      .filter((e) => calEventInSpan(e, start, end))
+      .filter((e) => calEventInSpan(e, start, planEnd))
       .map(calSlim),
   };
 
-  // --- Events / trips: Weeks relation primary, Date-range fallback.
+  // --- Events / trips: Weeks relation primary, Date-range fallback over the
+  // plan span (a trip or event on next Sunday carries next week's relation).
   const eventsById = new Map();
   for (const e of joinByWeek(plan.events, weekNotionId)) {
     eventsById.set(e._notionId, e);
   }
   for (const e of plan.events || []) {
-    if (inRange(e.Date, start, end)) eventsById.set(e._notionId, e);
+    if (inRange(e.Date, start, planEnd)) eventsById.set(e._notionId, e);
   }
   const events = [...eventsById.values()].map(strip);
-  const trips = joinByWeek(plan.trips, weekNotionId).map(strip);
+  const tripsById = new Map();
+  for (const t of joinByWeek(plan.trips, weekNotionId)) {
+    tripsById.set(t._notionId, t);
+  }
+  for (const t of plan.trips || []) {
+    const s = typeof t.Date === "string" ? t.Date.slice(0, 10) : null;
+    const e = typeof t["Date End"] === "string" ? t["Date End"].slice(0, 10) : s;
+    if (s && s <= planEnd && e >= start) tripsById.set(t._notionId, t);
+  }
+  const trips = [...tripsById.values()].map(strip);
 
   // --- Existing outcome state (plan tops up; it never double-books).
   const rocksForWeek = joinByWeek(plan.rocks, weekNotionId);
   const soberDrinking = ["sober", "drinking"]
     .flatMap((cal) => calendar[cal] || [])
-    .filter((e) => calEventInSpan(e, start, end))
+    .filter((e) => calEventInSpan(e, start, planEnd))
     .map((e) => ({ summary: e.summary, start: e.start, end: e.end }));
   const plannedBlocks = (calendar.personalCalendar || [])
     .filter(
       (e) =>
-        calEventInSpan(e, start, end) &&
+        calEventInSpan(e, start, planEnd) &&
         String(e.summary || "").startsWith("Planned:")
     )
     .map(calSlim);
@@ -363,13 +390,15 @@ function buildBundle(wk) {
       notionId: weekNotionId,
       start,
       end,
+      // Day-grain plan span runs to next Sunday; `end` stays the Notion week.
+      planEnd,
     },
     tasks,
     calendarBlocks,
     events,
     trips,
-    // Forward events/trips past the target week — planning lookahead.
-    upcoming: upcomingEventsTrips(plan, end, LOOKAHEAD_DAYS),
+    // Forward events/trips past the plan span — planning lookahead.
+    upcoming: upcomingEventsTrips(plan, planEnd, LOOKAHEAD_DAYS),
     existingState: {
       rocks: {
         personal: rocksForWeek
@@ -422,7 +451,7 @@ function buildBundle(wk) {
         tickets: workTaskRows
           .filter(
             (t) =>
-              inRange(t["Due Date"], start, end) ||
+              inRange(t["Due Date"], start, planEnd) ||
               (!t["Due Date"] && !SETTLED.has(t.Status))
           )
           .map(stripKeepId),
@@ -499,6 +528,7 @@ module.exports = {
   openTaskCounts,
   undatedBacklog,
   SETTLED,
+  PLAN_OVERHANG_DAYS,
   WEEKS_RELATION,
   MONTHS_RELATION,
 };
