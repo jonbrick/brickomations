@@ -28,7 +28,10 @@ module.exports = {
     status: { name: "Status", type: "select", enabled: true },
     category: { name: "Category", type: "select", enabled: true },
     date: { name: "Date", type: "date", enabled: true },
-    subcategory: { name: "Subcategory", type: "select", enabled: true },
+    // Two side-scoped type columns (restructured Fri 2026-10-16): the former
+    // Subcategory was renamed PERSONAL Category — same property id, so the Weeks
+    // rollup formulas still resolve — and its five work types moved to WORK
+    // Category. Category itself is just the side.
     personalCategory: { name: "PERSONAL Category", type: "select", enabled: true },
     workCategory: { name: "WORK Category", type: "select", enabled: true },
     description: { name: "Description", type: "rich_text", enabled: true },

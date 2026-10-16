@@ -9,7 +9,7 @@ const { CALENDAR_SKIP_STATUSES } = require("../config/notion/task-categories");
 const { addOneDay } = require("../utils/date");
 
 /**
- * Extract emoji from subcategory (e.g., "🎸 Concerts" → "🎸")
+ * Extract emoji from a type value (e.g., "🎸 Concerts" → "🎸")
  * Uses Unicode emoji regex to properly handle multi-byte emojis
  * @param {string|Array|null} subcategory - Subcategory value from Notion
  * @returns {string} Emoji with space, or empty string
@@ -52,13 +52,9 @@ function transformEventToCalendarEvent(record, repo) {
     record,
     config.notion.getPropertyName(props.category)
   );
-  const subcategory = repo.extractProperty(
-    record,
-    config.notion.getPropertyName(props.subcategory)
-  );
-  // Two-field model: the lane (PERSONAL Category / WORK Category) carries the
-  // color and rides the description; Category is just the side.
-  const lane =
+  // Category is the side; the type lives in the side's column — PERSONAL
+  // Category (the former Subcategory, same property id) or WORK Category.
+  const type =
     repo.extractProperty(
       record,
       config.notion.getPropertyName(props.personalCategory)
@@ -83,14 +79,14 @@ function transformEventToCalendarEvent(record, repo) {
   }
 
   // Build summary with emoji prefix
-  const emoji = extractEmoji(subcategory);
+  const emoji = extractEmoji(type);
   const summary = `${emoji}${eventName}`;
 
   // Build description
   const descParts = [];
   if (description) descParts.push(description);
-  if (category) descParts.push(`Category: ${category}${lane ? ` · ${lane}` : ""}`);
-  if (subcategory) descParts.push(`Type: ${subcategory}`);
+  if (category) descParts.push(`Category: ${category}`);
+  if (type) descParts.push(`Type: ${type}`);
 
   // Build event object
   // Google Calendar all-day events use exclusive end dates
@@ -101,8 +97,8 @@ function transformEventToCalendarEvent(record, repo) {
     end: { date: addOneDay(dateRange.end) },
   };
 
-  // Add color if mapped (status > subcategory > lane > side)
-  const colorId = getColorIdForNotionEvent(category, subcategory, status, lane);
+  // Add color if mapped (status > type > side)
+  const colorId = getColorIdForNotionEvent(category, type, status);
   if (colorId) {
     event.colorId = colorId;
   }
