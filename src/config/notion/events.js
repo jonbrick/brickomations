@@ -29,6 +29,8 @@ module.exports = {
     category: { name: "Category", type: "select", enabled: true },
     date: { name: "Date", type: "date", enabled: true },
     subcategory: { name: "Subcategory", type: "select", enabled: true },
+    personalCategory: { name: "PERSONAL Category", type: "select", enabled: true },
+    workCategory: { name: "WORK Category", type: "select", enabled: true },
     description: { name: "Description", type: "rich_text", enabled: true },
     calendarEventId: {
       name: "Calendar Event ID",

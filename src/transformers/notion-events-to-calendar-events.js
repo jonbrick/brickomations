@@ -53,6 +53,18 @@ function transformEventToCalendarEvent(record, repo) {
     record,
     config.notion.getPropertyName(props.subcategory)
   );
+  // Two-field model: the lane (PERSONAL Category / WORK Category) carries the
+  // color and rides the description; Category is just the side.
+  const lane =
+    repo.extractProperty(
+      record,
+      config.notion.getPropertyName(props.personalCategory)
+    ) ||
+    repo.extractProperty(
+      record,
+      config.notion.getPropertyName(props.workCategory)
+    ) ||
+    null;
   const description = repo.extractProperty(
     record,
     config.notion.getPropertyName(props.description)
@@ -74,7 +86,7 @@ function transformEventToCalendarEvent(record, repo) {
   // Build description
   const descParts = [];
   if (description) descParts.push(description);
-  if (category) descParts.push(`Category: ${category}`);
+  if (category) descParts.push(`Category: ${category}${lane ? ` · ${lane}` : ""}`);
   if (subcategory) descParts.push(`Type: ${subcategory}`);
 
   // Build event object
@@ -86,8 +98,8 @@ function transformEventToCalendarEvent(record, repo) {
     end: { date: addOneDay(dateRange.end) },
   };
 
-  // Add color if mapped (status > subcategory > category)
-  const colorId = getColorIdForNotionEvent(category, subcategory, status);
+  // Add color if mapped (status > subcategory > lane > side)
+  const colorId = getColorIdForNotionEvent(category, subcategory, status, lane);
   if (colorId) {
     event.colorId = colorId;
   }
