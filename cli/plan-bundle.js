@@ -379,6 +379,25 @@ function buildBundle(wk) {
     (w) => w.Week === `Week ${String(wk - 1).padStart(2, "0")}`
   );
   const priorWeekNotionId = priorWeekRecord ? priorWeekRecord._notionId : null;
+  const priorRetroStatus = (rows) => {
+    const r = joinByWeek(rows, priorWeekNotionId)[0];
+    return r ? r.Status || null : null;
+  };
+  // Last week's unsettled tasks, by side — the carry-overs if no retro ran.
+  const priorStart = priorWeekRecord ? priorWeekRecord["Date Range (SET)"] : null;
+  const priorEnd = priorWeekRecord ? priorWeekRecord["Date Range (SET) End"] : null;
+  const priorOpen = priorWeekRecord
+    ? (life.tasks || []).filter(
+        (t) =>
+          !SETTLED.has(t.Status) &&
+          (t["Week Number"] === `Week ${wk - 1}` ||
+            (priorStart && priorEnd && inRange(t["Due Date"], priorStart, priorEnd)))
+      )
+    : [];
+  const priorOpenTasks = {
+    personal: priorOpen.filter((t) => t.Category !== "💼 Work").map(strip),
+    work: priorOpen.filter((t) => t.Category === "💼 Work").map(strip),
+  };
 
   const bundle = {
     generatedAt: new Date().toISOString(),
@@ -474,6 +493,15 @@ function buildBundle(wk) {
                 null,
             },
             rocks: joinByWeek(plan.rocks, priorWeekNotionId).map(strip),
+            // Upstream state the audit beat reads: was last week retro'd, and
+            // what's still open there. /retro-week is what re-dates or closes
+            // last week's tasks — skip it and they'd otherwise vanish from
+            // this week's bundle (tasks join by Week Number or due-in-span).
+            retroStatus: {
+              personal: priorRetroStatus(retro.personalWeekly),
+              work: priorRetroStatus(retro.workWeekly),
+            },
+            openTasks: priorOpenTasks,
             // Prior week's numbers are the defaults for the habit walk.
             habitsPlan:
               strip(joinByWeek(life.habitsPlan, priorWeekNotionId)[0]) || null,
