@@ -23,7 +23,7 @@ const {
   PERSONAL_OVERALL,
   WORK_OVERALL,
 } = require("./render-portfolio");
-const { sideLaneLines } = require("./render-events-trips");
+const { sideTypeLines } = require("./render-events-trips");
 
 // pick first present, non-empty string value among candidate keys
 function pick(obj, keys) {
@@ -110,13 +110,13 @@ function render(b) {
   }
 
   // ---------- EVENTS + TRIPS ----------
-  // Grouped by side, then lane (two-field category model, 2026-10-16); the
-  // item tag carries what the headings don't: Subcategory · Status.
-  const itemTag = (r) =>
-    [r.Subcategory, r.Status].flat().filter(Boolean).join(" · ");
+  // Grouped by side, then type (Events: PERSONAL / WORK Category; Trips:
+  // Subcategory — restructured 2026-10-16); the item tag carries what the
+  // headings don't: Status.
+  const itemTag = (r) => r.Status || "";
   P("");
   P(RULE);
-  P(`EVENTS & TRIPS   (in month · by side → lane · date-only by schema)`);
+  P(`EVENTS & TRIPS   (in month · by side → type · date-only by schema)`);
   const tripLine = (t) => {
     const name = pick(t, ["Trip Name", "Trip", "title", "Name"]);
     const s = ymd(pick(t, ["Date", "Start", "Start Date"]));
@@ -124,14 +124,14 @@ function render(b) {
     const tags = itemTag(t);
     return `✈️  ${pretty(s)}${e !== s ? ` → ${pretty(e)}` : ""}  ${name}${tags ? `  (${tags})` : ""}`;
   };
-  for (const ln of sideLaneLines(`  Trips (${b.trips.length})`, b.trips, tripLine, "    ")) P(ln);
+  for (const ln of sideTypeLines(`  Trips (${b.trips.length})`, b.trips, tripLine, "    ")) P(ln);
   const eventLine = (e) => {
     const name = pick(e, ["Event Name", "Event", "title", "Name"]);
     const tags = itemTag(e);
     return `🎟️  ${pretty(ymd(e.Date))}  ${name}${tags ? `  (${tags})` : ""}`;
   };
   const eventsByDate = [...b.events].sort((a, b) => ymd(a.Date).localeCompare(ymd(b.Date)));
-  for (const ln of sideLaneLines(`  Events (${b.events.length})`, eventsByDate, eventLine, "    ")) P(ln);
+  for (const ln of sideTypeLines(`  Events (${b.events.length})`, eventsByDate, eventLine, "    ")) P(ln);
 
   // ---------- UPCOMING ----------
   const up = b.upcoming;
@@ -146,13 +146,13 @@ function render(b) {
       const tags = itemTag(t);
       return `${pretty(s)}${e && e !== s ? `–${pretty(e)}` : ""}  ${name}${tags ? `  (${tags})` : ""}`;
     };
-    for (const ln of sideLaneLines(`  Trips (${up.trips.length})`, up.trips, upTripLine, "    ")) P(ln);
+    for (const ln of sideTypeLines(`  Trips (${up.trips.length})`, up.trips, upTripLine, "    ")) P(ln);
     const upEventLine = (e) => {
       const name = pick(e, ["Event Name", "Event", "title", "Name"]);
       const tags = itemTag(e);
       return `${pretty(ymd(e.Date))}  ${name}${tags ? `  (${tags})` : ""}`;
     };
-    for (const ln of sideLaneLines(`  Events (${up.events.length})`, up.events, upEventLine, "    ")) P(ln);
+    for (const ln of sideTypeLines(`  Events (${up.events.length})`, up.events, upEventLine, "    ")) P(ln);
   }
 
   P("");

@@ -55,33 +55,41 @@ const WORK_KEYWORD_CATEGORIES = [
   },
 ];
 
-// Events/Trips side → Google Calendar color.
-// Two-field model (Events + Trips migrated 2026-10-16, same shape as Tasks):
-// `Category` is the side (💼 Work / 🌱 Personal / 🫥 N/A); the lane lives in
-// `PERSONAL Category` / `WORK Category`. The lane carries the color (below);
-// the side is the fallback.
+// Events/Trips side → Google Calendar color. `Category` is the side
+// (💼 Work / 🌱 Personal / 🫥 N/A); the type below carries the color, the side
+// is the fallback.
 const EVENTS_TRIPS_CATEGORY_TO_COLOR = {
   "💼 Work": "7", // Peacock
   "🌱 Personal": null, // Default
 };
 
-// Events/Trips lane → Google Calendar color. Personal lanes match the personal
-// calendar legend (PERSONAL_COLOR_MAPPING); lanes with no legend color (Hobbies,
-// Cooking, Admin) stay default. Work lanes all ride the side color — one Peacock.
-const EVENTS_TRIPS_LANE_TO_COLOR = {
-  "🍻 Interpersonal": "3", // Grape
-  "🏠 Home": "5", // Banana
-  "💪 Physical Health": "8", // Graphite
-  "❤️ Mental Health": "11", // Tomato
+// Events/Trips type → Google Calendar color (Fri 2026-10-16). Events keep the
+// type in PERSONAL Category / WORK Category, trips in Subcategory. This list
+// mirrors the option colors Jon keeps in Notion — purple interpersonal, yellow
+// home, gray physical, red wasted day. Green and default options, and every
+// work type, take the side color. Edit here when an option's color changes.
+const EVENTS_TRIPS_TYPE_TO_COLOR = {
+  // purple → Grape
+  "💜 Family Event": "3",
+  "🍻 Friend Event": "3",
+  "🗽 Friends & Fam visit NYC": "3",
+  "💒 Wedding": "3",
+  "❤️ Relationship": "3",
+  "🎄 Family Holidays": "3",
+  "💜 Family Trip": "3",
+  "🍻 Friends Trip": "3",
+  // yellow → Banana
+  "🏠 Home Updates": "5",
+  // gray → Graphite
+  "🏋️‍♀️ Personal Training": "8",
+  "🧗 Adventures": "8",
+  "🏃 Race": "8",
+  "🧗‍♀️ Adventure": "8",
+  // red → Tomato
+  "😔 Wasted Day": "11",
 };
 
-// Events Subcategory to Color Mapping (overrides category when set)
-// Maps Notion Events Subcategory values to Google Calendar color IDs
-const EVENTS_SUBCATEGORY_TO_COLOR = {
-  "😔 Wasted Day": "11", // Tomato/red (the Notion option string; was "Wasted day" and never matched)
-};
-
-// Events Status to Color Mapping (overrides subcategory + category when set)
+// Events Status to Color Mapping (overrides type + side when set)
 // "🫥 N/A" = external context (Mercury retrograde, family in Baltimore, etc.)
 // Note: "8" Graphite collides with physicalHealth in PERSONAL_COLOR_MAPPING, but
 // that map only applies to reads from the personalCalendar — `events` calendar is
@@ -205,15 +213,15 @@ function getEnhancedWorkCategory(event) {
 }
 
 /**
- * Get Google Calendar color ID for a Notion Event/Trip from its lane and side.
- * Precedence: lane (PERSONAL Category / WORK Category) > side (Category).
+ * Get Google Calendar color ID for a Notion Event/Trip from its type and side.
+ * Precedence: type (PERSONAL Category / WORK Category / trip Subcategory) > side.
  * @param {string|null} category - Notion Category value (the side)
- * @param {string|null} [lane] - PERSONAL Category or WORK Category value
+ * @param {string|null} [type] - the record's type value
  * @returns {string|null} Google Calendar color ID or null for the calendar default
  */
-function getColorIdFromNotionCategory(category, lane) {
-  if (lane != null && EVENTS_TRIPS_LANE_TO_COLOR[lane] !== undefined) {
-    return EVENTS_TRIPS_LANE_TO_COLOR[lane];
+function getColorIdFromNotionCategory(category, type) {
+  if (type != null && EVENTS_TRIPS_TYPE_TO_COLOR[type] !== undefined) {
+    return EVENTS_TRIPS_TYPE_TO_COLOR[type];
   }
   if (!category) return null;
   return EVENTS_TRIPS_CATEGORY_TO_COLOR[category] || null;
@@ -221,30 +229,24 @@ function getColorIdFromNotionCategory(category, lane) {
 
 /**
  * Get Google Calendar color ID for a Notion Event
- * Precedence: Status > Subcategory > lane > side (Category)
+ * Precedence: Status > type > side (Category)
  * @param {string|null} category - Notion Events Category value (the side)
- * @param {string|Array|null} subcategory - Notion Events Subcategory value (may be array from multi-select)
+ * @param {string|null} type - PERSONAL Category or WORK Category value
  * @param {string|null} status - Notion Events Status value (e.g., "🫥 N/A")
- * @param {string|null} [lane] - PERSONAL Category or WORK Category value
  * @returns {string|null} Google Calendar color ID or null if no color
  */
-function getColorIdForNotionEvent(category, subcategory, status, lane) {
+function getColorIdForNotionEvent(category, type, status) {
   if (status != null && EVENTS_STATUS_TO_COLOR[status] !== undefined) {
     return EVENTS_STATUS_TO_COLOR[status];
   }
-  const sub = Array.isArray(subcategory) ? subcategory[0] : subcategory;
-  if (sub != null && EVENTS_SUBCATEGORY_TO_COLOR[sub] !== undefined) {
-    return EVENTS_SUBCATEGORY_TO_COLOR[sub];
-  }
-  return getColorIdFromNotionCategory(category, lane);
+  return getColorIdFromNotionCategory(category, type);
 }
 
 module.exports = {
   PERSONAL_COLOR_MAPPING,
   WORK_COLOR_MAPPING,
   EVENTS_TRIPS_CATEGORY_TO_COLOR,
-  EVENTS_TRIPS_LANE_TO_COLOR,
-  EVENTS_SUBCATEGORY_TO_COLOR,
+  EVENTS_TRIPS_TYPE_TO_COLOR,
   EVENTS_STATUS_TO_COLOR,
   getPersonalCategoryByColor,
   getPersonalCategoryDisplayName,

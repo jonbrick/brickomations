@@ -1,102 +1,95 @@
 /**
  * @layer 1 - Integration (CLI)
  *
- * Events + trips grouped by side, then lane. Shared by plan-view and
- * month-view so a departure, a launch, a lease, an election each land in the
- * lane they belong to instead of a flat list.
+ * Events + trips grouped by side, then type. Shared by plan-view and
+ * month-view so a departure, a launch, a lease, an election each land under
+ * their own heading instead of a flat list.
  *
- * Two-field category model — `Category` is the side (💼 Work / 🌱 Personal /
- * 🫥 N/A); the lane lives in `PERSONAL Category` / `WORK Category`. Tasks,
- * Projects and Big Rocks adopted it 2026-08-16; Events and Trips followed on
- * Fri 2026-10-16 (scripts/migrate-events-trips-categories.js). Lane order is
- * the Notion option order, read from the task-category maps so the three
- * record kinds never drift.
+ * Shape (restructured Fri 2026-10-16): `Category` is the side (💼 Work /
+ * 🌱 Personal / 🫥 N/A). Events keep the type in the side's column —
+ * `PERSONAL Category` (the former Subcategory) or `WORK Category`; Trips keep
+ * one combined `Subcategory` (multi-select). Types are Jon's own lists, not
+ * the Tasks lanes, so nothing here hard-codes them: groups appear in the order
+ * their first record does, which for date-sorted input is chronological.
  */
-
-const {
-  PERSONAL_TASK_CATEGORY_MAPPING,
-  WORK_TASK_CATEGORY_MAPPING,
-} = require("../src/config/notion/task-categories");
 
 const WORK = "💼 Work";
 const NA = "🫥 N/A";
-const PERSONAL_LANES = Object.keys(PERSONAL_TASK_CATEGORY_MAPPING);
-const WORK_LANES = Object.keys(WORK_TASK_CATEGORY_MAPPING);
-const NO_LANE = "(no lane)";
+const NO_TYPE = "(no type)";
 
 // Side order is the readout order: personal, work, then ambient context.
 const SIDES = [
-  { key: "personal", label: "🌱 personal", lanes: PERSONAL_LANES },
-  { key: "work", label: "💼 work", lanes: WORK_LANES },
-  { key: "na", label: "🫥 n/a", lanes: [] },
+  { key: "personal", label: "🌱 personal", typed: true },
+  { key: "work", label: "💼 work", typed: true },
+  { key: "na", label: "🫥 n/a", typed: false },
 ];
 
 const sideOf = (r) =>
   r && r.Category === WORK ? "work" : r && r.Category === NA ? "na" : "personal";
 
-const laneOf = (r) =>
-  (r && (r["PERSONAL Category"] || r["WORK Category"])) || "";
-
-// Side · lane · Subcategory · Status — the tag a DAY BY DAY line carries.
-// Trips' Subcategory is a multi-select (array); flat() folds it in.
-function laneTag(r) {
+// Events: PERSONAL Category / WORK Category. Trips: Subcategory (array).
+function typeOf(r) {
   if (!r) return "";
-  return [r.Category, laneOf(r), r.Subcategory, r.Status]
-    .flat()
-    .filter(Boolean)
-    .join(" · ");
+  const t = r["PERSONAL Category"] || r["WORK Category"] || r.Subcategory;
+  if (Array.isArray(t)) return t.filter(Boolean).join(" · ");
+  return t || "";
+}
+
+// Side · type · Status — the tag a DAY BY DAY line carries.
+function typeTag(r) {
+  if (!r) return "";
+  return [r.Category, typeOf(r), r.Status].filter(Boolean).join(" · ");
 }
 
 /**
- * Group records by side, then lane.
- * @returns {Array<{key, label, count, lanes: Array<{lane: string|null, items: Array}>}>}
- *   Sides with no records are omitted. Lanes come in canonical order; a record
- *   whose lane is blank or unknown lands under "(no lane)" after them. A side
- *   with no lane set (🫥 N/A) yields one lane group with `lane: null`.
- *   Items keep input order — callers sort by date first.
+ * Group records by side, then type.
+ * @returns {Array<{key, label, count, types: Array<{type: string|null, items: Array}>}>}
+ *   Sides with no records are omitted. Types appear in first-record order;
+ *   a record with no type lands under "(no type)" last. The 🫥 N/A side has no
+ *   type heading (one group with `type: null`). Items keep input order.
  */
-function groupBySideAndLane(records) {
+function groupBySideAndType(records) {
   const out = [];
   for (const side of SIDES) {
     const mine = (records || []).filter((r) => sideOf(r) === side.key);
     if (!mine.length) continue;
-    if (!side.lanes.length) {
-      out.push({ key: side.key, label: side.label, count: mine.length, lanes: [{ lane: null, items: mine }] });
+    if (!side.typed) {
+      out.push({ key: side.key, label: side.label, count: mine.length, types: [{ type: null, items: mine }] });
       continue;
     }
-    const byLane = new Map();
+    const byType = new Map();
     for (const r of mine) {
-      const lane = laneOf(r) || NO_LANE;
-      if (!byLane.has(lane)) byLane.set(lane, []);
-      byLane.get(lane).push(r);
+      const t = typeOf(r) || NO_TYPE;
+      if (!byType.has(t)) byType.set(t, []);
+      byType.get(t).push(r);
     }
-    const known = side.lanes.filter((l) => byLane.has(l));
-    const unknown = [...byLane.keys()].filter((l) => !side.lanes.includes(l)).sort();
+    const order = [...byType.keys()].filter((t) => t !== NO_TYPE);
+    if (byType.has(NO_TYPE)) order.push(NO_TYPE);
     out.push({
       key: side.key,
       label: side.label,
       count: mine.length,
-      lanes: [...known, ...unknown].map((lane) => ({ lane, items: byLane.get(lane) })),
+      types: order.map((type) => ({ type, items: byType.get(type) })),
     });
   }
   return out;
 }
 
 /**
- * Render a titled block: title, then side → lane → item lines.
+ * Render a titled block: title, then side → type → item lines.
  * @param {string} title            e.g. "EVENTS (12)" (caller stamps the count)
- * @param {Array} records
+ * @param {Array} records           date-sorted by the caller
  * @param {(r: object) => string} line   one item as text, no indent
- * @param {string} [indent="  "]    indent of the side label; lanes +2, items +4
+ * @param {string} [indent="  "]    indent of the side label; types +2, items +4
  * @returns {string[]}
  */
-function sideLaneLines(title, records, line, indent = "  ") {
+function sideTypeLines(title, records, line, indent = "  ") {
   const out = [title];
-  for (const g of groupBySideAndLane(records)) {
+  for (const g of groupBySideAndType(records)) {
     out.push(`${indent}${g.label} (${g.count})`);
-    for (const { lane, items } of g.lanes) {
-      if (lane !== null) out.push(`${indent}  ${lane}`);
-      const itemIndent = lane !== null ? `${indent}    ` : `${indent}  `;
+    for (const { type, items } of g.types) {
+      if (type !== null) out.push(`${indent}  ${type}`);
+      const itemIndent = type !== null ? `${indent}    ` : `${indent}  `;
       for (const r of items) out.push(`${itemIndent}${line(r)}`);
     }
   }
@@ -104,12 +97,10 @@ function sideLaneLines(title, records, line, indent = "  ") {
 }
 
 module.exports = {
-  groupBySideAndLane,
-  sideLaneLines,
-  laneTag,
-  laneOf,
+  groupBySideAndType,
+  sideTypeLines,
+  typeTag,
+  typeOf,
   sideOf,
-  PERSONAL_LANES,
-  WORK_LANES,
-  NO_LANE,
+  NO_TYPE,
 };

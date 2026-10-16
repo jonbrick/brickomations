@@ -18,7 +18,7 @@ const fs = require("fs");
 const path = require("path");
 const { buildBundle } = require("./plan-bundle");
 const { portfolioLines } = require("./render-portfolio");
-const { sideLaneLines, laneTag } = require("./render-events-trips");
+const { sideTypeLines, typeTag } = require("./render-events-trips");
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
@@ -203,7 +203,7 @@ function render(b) {
   P("");
   P(RULE);
   P(
-    "DAY BY DAY   (personal + work calendars · events/trips tagged side · lane · type · status · ⛔ = DNS/hold · [x] = working loc)"
+    "DAY BY DAY   (personal + work calendars · events/trips tagged side · type · status · ⛔ = DNS/hold · [x] = working loc)"
   );
   const planEnd = b.week.planEnd || b.week.end;
   const pers = b.calendarBlocks.personal || [];
@@ -247,14 +247,14 @@ function render(b) {
         const { s: ts, e: te } = tripSpan(t);
         const where = day === ts ? "starts" : day === te ? "ends" : "mid-trip";
         const name = pick(t, ["Trip Name", "Trip", "title", "Name"]);
-        const tags = laneTag(t);
+        const tags = typeTag(t);
         P(
           `      ✈️  ${name}  ${pretty(ts)} → ${pretty(te)}  (${where}${tags ? ` · ${tags}` : ""})`
         );
       }
       for (const e of ev) {
         const name = pick(e, ["Event Name", "Event", "title", "Name"]);
-        const tags = laneTag(e);
+        const tags = typeTag(e);
         P(`      🎟️  ${name}${tags ? `  (${tags})` : ""}`);
       }
     }
@@ -290,13 +290,13 @@ function render(b) {
   }
 
   // ---------- EVENTS + TRIPS ----------
-  // Grouped by side (🌱 personal / 💼 work / 🫥 n/a), then lane — the two-field
-  // category model Events and Trips adopted 2026-10-16. Side + lane are the
-  // headings, so an item's tag carries only what's left: Subcategory · Status.
+  // Grouped by side (🌱 personal / 💼 work / 🫥 n/a), then type — Events keep
+  // the type in PERSONAL Category / WORK Category, Trips in Subcategory
+  // (restructured 2026-10-16). Side + type are the headings, so an item's tag
+  // carries only what's left: Status.
   const byDate = (keys) => (a, b) =>
     ymd(pick(a, keys)).localeCompare(ymd(pick(b, keys)));
-  const itemTag = (r) =>
-    [r.Subcategory, r.Status].flat().filter(Boolean).join(" · ");
+  const itemTag = (r) => r.Status || "";
   P("");
   P(RULE);
   const eventLine = (e) => {
@@ -305,7 +305,7 @@ function render(b) {
     const tags = itemTag(e);
     return `${name}${date ? `  — ${date}` : ""}${tags ? `  (${tags})` : ""}`;
   };
-  for (const ln of sideLaneLines(
+  for (const ln of sideTypeLines(
     `EVENTS (${b.events.length})`,
     [...b.events].sort(byDate(["Date"])),
     eventLine
@@ -320,7 +320,7 @@ function render(b) {
     const tags = itemTag(t);
     return `${name}${span}${tags ? `  (${tags})` : ""}`;
   };
-  for (const ln of sideLaneLines(
+  for (const ln of sideTypeLines(
     `TRIPS (${b.trips.length})`,
     [...b.trips].sort(byDate(["Date", "Start", "Start Date"])),
     tripLine
@@ -341,7 +341,7 @@ function render(b) {
       const tags = itemTag(e);
       return `${date ? pretty(date) : ""}  ${name}${tags ? `  (${tags})` : ""}`;
     };
-    for (const ln of sideLaneLines(`  Events (${up.events.length})`, up.events, upEventLine, "    "))
+    for (const ln of sideTypeLines(`  Events (${up.events.length})`, up.events, upEventLine, "    "))
       P(ln);
     const upTripLine = (t) => {
       const name = pick(t, ["Trip Name", "Trip", "title", "Name"]);
@@ -353,7 +353,7 @@ function render(b) {
       const tags = itemTag(t);
       return `${span}  ${name}${tags ? `  (${tags})` : ""}`;
     };
-    for (const ln of sideLaneLines(`  Trips (${up.trips.length})`, up.trips, upTripLine, "    "))
+    for (const ln of sideTypeLines(`  Trips (${up.trips.length})`, up.trips, upTripLine, "    "))
       P(ln);
   }
 

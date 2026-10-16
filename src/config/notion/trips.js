@@ -28,9 +28,9 @@ module.exports = {
     status: { name: "Status", type: "select", enabled: true },
     category: { name: "Category", type: "select", enabled: true },
     date: { name: "Date", type: "date", enabled: true },
+    // One combined type list (multi-select); Category is the side. The two
+    // lane columns briefly added on 2026-10-16 were dropped the same day.
     subcategory: { name: "Subcategory", type: "select", enabled: true },
-    personalCategory: { name: "PERSONAL Category", type: "select", enabled: true },
-    workCategory: { name: "WORK Category", type: "select", enabled: true },
     emoji: { name: "Emoji", type: "rich_text", enabled: true },
     description: { name: "Description", type: "rich_text", enabled: true },
     calendarEventId: {
