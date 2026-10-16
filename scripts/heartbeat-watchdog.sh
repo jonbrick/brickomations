@@ -16,6 +16,11 @@
 #   yarn-sync                   — every 2 hr, 7 AM–11 PM (7, 9, 11 AM, 1, 3, 5, 7, 9, 11 PM)
 #   cowork-morning-brief        — 6 AM
 #   cowork-evening-processor    — 9 PM
+#   granola-sync                — every 30 min while Obsidian is open (pull-based;
+#                                 reads the plugin's own state — see check_granola_sync)
+#
+# WATCHDOG_DRY_RUN=1 prints would-be alerts to stdout instead of iMessaging,
+# ignores and doesn't write throttle markers. For testing a check by hand.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -30,7 +35,7 @@ if [ -f "$REPO_ROOT/.env" ]; then
     | head -1 | cut -d= -f2-)
 fi
 
-if [ -z "${ALERT_IMESSAGE_TARGET:-}" ]; then
+if [ -z "${ALERT_IMESSAGE_TARGET:-}" ] && [ "${WATCHDOG_DRY_RUN:-}" != "1" ]; then
   echo "ALERT_IMESSAGE_TARGET not set in .env; watchdog exiting silently." >&2
   exit 0
 fi
@@ -49,6 +54,10 @@ INSTALL_EPOCH=$(cat "$INSTALL_MARKER")
 
 send_imessage() {
   local msg="$1"
+  if [ "${WATCHDOG_DRY_RUN:-}" = "1" ]; then
+    echo "DRY RUN — would send: $msg"
+    return
+  fi
   local escaped="${msg//\"/\\\"}"
   local script
   script=$(mktemp -t brickomations-watchdog)
@@ -71,6 +80,11 @@ alert() {
   local detail="$2"
   local key="$3"
   local marker="$HEARTBEAT_DIR/.${job}.last-alert"
+
+  if [ "${WATCHDOG_DRY_RUN:-}" = "1" ]; then
+    send_imessage "[brickomations $(date +%Y-%m-%d)] ${job}: ${detail}  (key=${key})"
+    return
+  fi
 
   if [ -f "$marker" ] && [ "$(cat "$marker")" = "$key" ]; then
     return
@@ -167,6 +181,94 @@ check_job() {
   fi
 }
 
+# ---------------------------------------------------------------------------
+# Granola Sync (Obsidian plugin) — the one pull-based check.
+#
+# The plugin can't write a ping file, so the watchdog reads the plugin's own
+# state inside the vault. Three signals, coarse → fine:
+#
+#   1. Liveness — with the plugin's "Enable debug logging" on, every sync
+#      cycle (30 min) appends a "Sync started" line to
+#      <plugin>/logs/<session>.log whether or not anything synced. Newest log
+#      untouched for GRANOLA_LIVENESS_SEC inside the awake window means the
+#      timer is dead: Obsidian closed, plugin disabled, or logging off.
+#   2. Health — the last "Sync started" block must contain a "Listed N note"
+#      line (API key accepted, listing succeeded). Missing = the cycle failed
+#      (no API key, 401, network). Skipped while the block is <3 min old.
+#   3. Progress — data.json latestSyncTime only advances when a note is
+#      written, so it's a backstop: older than GRANOLA_PROGRESS_SEC means
+#      nothing has landed for days even though cycles run.
+#
+# Alert keys include today's date → one text per condition per day while
+# the condition holds. Lesson learned 2026-10-16: the plugin stalled silently
+# for 36 days (Granola encrypted its local credentials on 2026-09-10; the old
+# plugin only surfaced an in-app Notice nobody saw on a headless mini).
+# ---------------------------------------------------------------------------
+VAULT_DIR="${BRICKOCAMPUS_DIR:-$HOME/projects/brickocampus}"
+GRANOLA_PLUGIN_DIR="$VAULT_DIR/.obsidian/plugins/granola-sync"
+GRANOLA_WINDOW_START="07:00"   # local time — the mini wakes 05:45; first cycle lands by ~06:30
+GRANOLA_WINDOW_END="23:00"     # caffeinate releases 23:30
+GRANOLA_LIVENESS_SEC=7200      # 4 missed 30-min cycles
+GRANOLA_PROGRESS_SEC=$((4 * 86400))
+
+check_granola_sync() {
+  local job="granola-sync"
+  local now_hm
+  now_hm=$(date +%H:%M)
+  if [[ "$now_hm" < "$GRANOLA_WINDOW_START" || "$now_hm" > "$GRANOLA_WINDOW_END" ]]; then
+    return
+  fi
+
+  local data_json="$GRANOLA_PLUGIN_DIR/data.json"
+  if [ ! -f "$data_json" ]; then
+    alert "$job" "plugin data.json missing ($data_json)" "missing-${TODAY}"
+    return
+  fi
+
+  local obsidian_state="Obsidian running"
+  pgrep -xq Obsidian || obsidian_state="Obsidian NOT running"
+
+  # 1. Liveness.
+  local log_file
+  log_file=$(ls -t "$GRANOLA_PLUGIN_DIR"/logs/*.log 2>/dev/null | head -1)
+  if [ -z "$log_file" ]; then
+    alert "$job" "no debug log under .obsidian/plugins/granola-sync/logs — plugin not loaded or debug logging off; $obsidian_state" "nolog-${TODAY}"
+    return
+  fi
+  local log_epoch
+  log_epoch=$(stat -f '%m' "$log_file")
+  if [ $((NOW_EPOCH - log_epoch)) -gt "$GRANOLA_LIVENESS_SEC" ]; then
+    alert "$job" "no sync cycle since $(date -r "$log_epoch" '+%a %H:%M'); $obsidian_state" "dead-${TODAY}"
+    return
+  fi
+
+  # 2. Health — last cycle must have listed notes.
+  local last_block
+  last_block=$(awk '/Sync started/ { buf = "" } { buf = buf $0 "\n" } END { printf "%s", buf }' "$log_file")
+  if [ -n "$last_block" ] && ! printf '%s' "$last_block" | grep -q "Listed "; then
+    # Log lines start with an ISO-8601 UTC stamp: 2026-10-16T11:30:00.123Z
+    local started_iso started_epoch
+    started_iso=$(printf '%s' "$last_block" | head -1 | cut -d. -f1)
+    started_epoch=$(date -j -u -f "%Y-%m-%dT%H:%M:%S" "$started_iso" +%s 2>/dev/null || echo 0)
+    if [ "$started_epoch" -gt 0 ] && [ $((NOW_EPOCH - started_epoch)) -gt 180 ]; then
+      local err
+      err=$(printf '%s' "$last_block" | grep '\[ERROR\]' | tail -1 | cut -c1-160)
+      alert "$job" "last cycle $(date -r "$started_epoch" '+%H:%M') did not list notes — API key missing/rejected or network${err:+; $err}" "fail-${TODAY}"
+      return
+    fi
+  fi
+
+  # 3. Progress backstop.
+  local last_ms
+  last_ms=$(sed -n 's/^[[:space:]]*"latestSyncTime":[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$data_json" | head -1)
+  if [ -n "$last_ms" ] && [ "$last_ms" -gt 0 ]; then
+    local last_s=$((last_ms / 1000))
+    if [ $((NOW_EPOCH - last_s)) -gt "$GRANOLA_PROGRESS_SEC" ]; then
+      alert "$job" "cycles run but no note written since $(date -r "$last_s" '+%Y-%m-%d %H:%M') — check API key scope / Granola" "stale-${last_ms}-${TODAY}"
+    fi
+  fi
+}
+
 check_job "brickomations-daily-brief" "05:50" 600
 
 check_job "pull-linear" "06:30" 900
@@ -178,5 +280,7 @@ check_job "yarn-sync" \
 check_job "cowork-morning-brief" "06:00" 1800
 
 check_job "cowork-evening-processor" "21:00" 1800
+
+check_granola_sync
 
 exit 0
