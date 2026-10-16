@@ -55,21 +55,30 @@ const WORK_KEYWORD_CATEGORIES = [
   },
 ];
 
-// Events/Trips Category to Color Mapping
-// Maps Notion category select values (with emojis) to Google Calendar color IDs
+// Events/Trips side → Google Calendar color.
+// Two-field model (Events + Trips migrated 2026-10-16, same shape as Tasks):
+// `Category` is the side (💼 Work / 🌱 Personal / 🫥 N/A); the lane lives in
+// `PERSONAL Category` / `WORK Category`. The lane carries the color (below);
+// the side is the fallback.
 const EVENTS_TRIPS_CATEGORY_TO_COLOR = {
-  "🍻 Interpersonal": "3", // Grape
   "💼 Work": "7", // Peacock
   "🌱 Personal": null, // Default
-  "❤️ Mental Health": "11", // Tomato (red) — matches personal calendar
-  "🏠 Home": "5", // Banana (yellow) — matches personal calendar
-  "💪 Physical Health": "8", // Graphite — matches personal calendar
+};
+
+// Events/Trips lane → Google Calendar color. Personal lanes match the personal
+// calendar legend (PERSONAL_COLOR_MAPPING); lanes with no legend color (Hobbies,
+// Cooking, Admin) stay default. Work lanes all ride the side color — one Peacock.
+const EVENTS_TRIPS_LANE_TO_COLOR = {
+  "🍻 Interpersonal": "3", // Grape
+  "🏠 Home": "5", // Banana
+  "💪 Physical Health": "8", // Graphite
+  "❤️ Mental Health": "11", // Tomato
 };
 
 // Events Subcategory to Color Mapping (overrides category when set)
 // Maps Notion Events Subcategory values to Google Calendar color IDs
 const EVENTS_SUBCATEGORY_TO_COLOR = {
-  "Wasted day": "11", // Tomato/red
+  "😔 Wasted Day": "11", // Tomato/red (the Notion option string; was "Wasted day" and never matched)
 };
 
 // Events Status to Color Mapping (overrides subcategory + category when set)
@@ -196,24 +205,30 @@ function getEnhancedWorkCategory(event) {
 }
 
 /**
- * Get Google Calendar color ID from Notion category value (Events/Trips)
- * @param {string|null} category - Notion category value (e.g., "🍻 Interpersonal", "💼 Work", "🌱 Personal")
- * @returns {string|null} Google Calendar color ID or null if no color
+ * Get Google Calendar color ID for a Notion Event/Trip from its lane and side.
+ * Precedence: lane (PERSONAL Category / WORK Category) > side (Category).
+ * @param {string|null} category - Notion Category value (the side)
+ * @param {string|null} [lane] - PERSONAL Category or WORK Category value
+ * @returns {string|null} Google Calendar color ID or null for the calendar default
  */
-function getColorIdFromNotionCategory(category) {
+function getColorIdFromNotionCategory(category, lane) {
+  if (lane != null && EVENTS_TRIPS_LANE_TO_COLOR[lane] !== undefined) {
+    return EVENTS_TRIPS_LANE_TO_COLOR[lane];
+  }
   if (!category) return null;
   return EVENTS_TRIPS_CATEGORY_TO_COLOR[category] || null;
 }
 
 /**
  * Get Google Calendar color ID for a Notion Event
- * Precedence: Status > Subcategory > Category
- * @param {string|null} category - Notion Events Category value
+ * Precedence: Status > Subcategory > lane > side (Category)
+ * @param {string|null} category - Notion Events Category value (the side)
  * @param {string|Array|null} subcategory - Notion Events Subcategory value (may be array from multi-select)
  * @param {string|null} status - Notion Events Status value (e.g., "🫥 N/A")
+ * @param {string|null} [lane] - PERSONAL Category or WORK Category value
  * @returns {string|null} Google Calendar color ID or null if no color
  */
-function getColorIdForNotionEvent(category, subcategory, status) {
+function getColorIdForNotionEvent(category, subcategory, status, lane) {
   if (status != null && EVENTS_STATUS_TO_COLOR[status] !== undefined) {
     return EVENTS_STATUS_TO_COLOR[status];
   }
@@ -221,13 +236,14 @@ function getColorIdForNotionEvent(category, subcategory, status) {
   if (sub != null && EVENTS_SUBCATEGORY_TO_COLOR[sub] !== undefined) {
     return EVENTS_SUBCATEGORY_TO_COLOR[sub];
   }
-  return getColorIdFromNotionCategory(category);
+  return getColorIdFromNotionCategory(category, lane);
 }
 
 module.exports = {
   PERSONAL_COLOR_MAPPING,
   WORK_COLOR_MAPPING,
   EVENTS_TRIPS_CATEGORY_TO_COLOR,
+  EVENTS_TRIPS_LANE_TO_COLOR,
   EVENTS_SUBCATEGORY_TO_COLOR,
   EVENTS_STATUS_TO_COLOR,
   getPersonalCategoryByColor,

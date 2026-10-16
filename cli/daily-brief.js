@@ -104,6 +104,8 @@ function getEvents(plan, date) {
     .map((e) => ({
       name: (e["Event Name"] || "").trim(),
       category: stripEmoji(e.Category),
+      // Two-field model (2026-10-16): Category is the side, the lane is the life-area.
+      lane: stripEmoji(e["PERSONAL Category"] || e["WORK Category"]),
       subcategory: stripEmoji(e.Subcategory),
       status: stripEmoji(e.Status),
       notes: (e.Notes || "").trim(),

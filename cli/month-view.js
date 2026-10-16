@@ -23,6 +23,7 @@ const {
   PERSONAL_OVERALL,
   WORK_OVERALL,
 } = require("./render-portfolio");
+const { sideLaneLines } = require("./render-events-trips");
 
 // pick first present, non-empty string value among candidate keys
 function pick(obj, keys) {
@@ -109,23 +110,28 @@ function render(b) {
   }
 
   // ---------- EVENTS + TRIPS ----------
+  // Grouped by side, then lane (two-field category model, 2026-10-16); the
+  // item tag carries what the headings don't: Subcategory · Status.
+  const itemTag = (r) =>
+    [r.Subcategory, r.Status].flat().filter(Boolean).join(" · ");
   P("");
   P(RULE);
-  P(`EVENTS & TRIPS   (in month · date-only by schema)`);
-  P(`  Trips (${b.trips.length})`);
-  for (const t of b.trips) {
+  P(`EVENTS & TRIPS   (in month · by side → lane · date-only by schema)`);
+  const tripLine = (t) => {
     const name = pick(t, ["Trip Name", "Trip", "title", "Name"]);
     const s = ymd(pick(t, ["Date", "Start", "Start Date"]));
     const e = ymd(pick(t, ["Date End", "End", "End Date"])) || s;
-    const tags = [t.Category, t.Subcategory, t.Status].filter(Boolean).join(" · ");
-    P(`      ✈️  ${pretty(s)}${e !== s ? ` → ${pretty(e)}` : ""}  ${name}${tags ? `  (${tags})` : ""}`);
-  }
-  P(`  Events (${b.events.length})`);
-  for (const e of b.events) {
+    const tags = itemTag(t);
+    return `✈️  ${pretty(s)}${e !== s ? ` → ${pretty(e)}` : ""}  ${name}${tags ? `  (${tags})` : ""}`;
+  };
+  for (const ln of sideLaneLines(`  Trips (${b.trips.length})`, b.trips, tripLine, "    ")) P(ln);
+  const eventLine = (e) => {
     const name = pick(e, ["Event Name", "Event", "title", "Name"]);
-    const tags = [e.Category, e.Subcategory, e.Status].filter(Boolean).join(" · ");
-    P(`      🎟️  ${pretty(ymd(e.Date))}  ${name}${tags ? `  (${tags})` : ""}`);
-  }
+    const tags = itemTag(e);
+    return `🎟️  ${pretty(ymd(e.Date))}  ${name}${tags ? `  (${tags})` : ""}`;
+  };
+  const eventsByDate = [...b.events].sort((a, b) => ymd(a.Date).localeCompare(ymd(b.Date)));
+  for (const ln of sideLaneLines(`  Events (${b.events.length})`, eventsByDate, eventLine, "    ")) P(ln);
 
   // ---------- UPCOMING ----------
   const up = b.upcoming;
@@ -133,20 +139,20 @@ function render(b) {
     P("");
     P(RULE);
     P(`UPCOMING   (next ${Math.round(up.days / 7)} weeks · ${up.from} → ${up.to})`);
-    P(`  Trips (${up.trips.length})`);
-    for (const t of up.trips) {
+    const upTripLine = (t) => {
       const name = pick(t, ["Trip Name", "Trip", "title", "Name"]);
       const s = ymd(pick(t, ["Date", "Start", "Start Date"]));
       const e = ymd(pick(t, ["Date End", "End", "End Date"]));
-      const tags = [t.Subcategory, t.Status].filter(Boolean).join(" · ");
-      P(`      ${pretty(s)}${e && e !== s ? `–${pretty(e)}` : ""}  ${name}${tags ? `  (${tags})` : ""}`);
-    }
-    P(`  Events (${up.events.length})`);
-    for (const e of up.events) {
+      const tags = itemTag(t);
+      return `${pretty(s)}${e && e !== s ? `–${pretty(e)}` : ""}  ${name}${tags ? `  (${tags})` : ""}`;
+    };
+    for (const ln of sideLaneLines(`  Trips (${up.trips.length})`, up.trips, upTripLine, "    ")) P(ln);
+    const upEventLine = (e) => {
       const name = pick(e, ["Event Name", "Event", "title", "Name"]);
-      const tags = [e.Category, e.Subcategory, e.Status].filter(Boolean).join(" · ");
-      P(`      ${pretty(ymd(e.Date))}  ${name}${tags ? `  (${tags})` : ""}`);
-    }
+      const tags = itemTag(e);
+      return `${pretty(ymd(e.Date))}  ${name}${tags ? `  (${tags})` : ""}`;
+    };
+    for (const ln of sideLaneLines(`  Events (${up.events.length})`, up.events, upEventLine, "    ")) P(ln);
   }
 
   P("");
