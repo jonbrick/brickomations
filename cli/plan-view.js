@@ -194,7 +194,7 @@ function render(b) {
   // against goals, projects, and the backlog before the calendar enters.
   P("");
   for (const ln of portfolioLines(b.inputs, {
-    subtitle: "(goals · projects · backlog · work state — Beat 1 reads this first)",
+    subtitle: "(goals · projects · backlog · work state — Beats 2–3 read this)",
   }))
     P(ln);
 
@@ -392,6 +392,16 @@ function render(b) {
     P("PRIOR WEEK: none found");
   } else {
     P(`PRIOR WEEK ${pw.number} — habit-walk defaults`);
+    // Upstream gaps first: the audit beat pauses on a missing retro and
+    // carries these tasks forward if Jon continues without one.
+    const rs = pw.retroStatus || {};
+    P(`  Retro: 🌱 ${rs.personal || "no row"} · 💼 ${rs.work || "no row"}`);
+    const po = pw.openTasks || { personal: [], work: [] };
+    const openN = po.personal.length + po.work.length;
+    P(`  Open tasks still dated there (${openN})${openN ? ":" : ""}`);
+    for (const [label, arr] of [["🌱", po.personal], ["💼", po.work]])
+      for (const t of arr)
+        P(`      ${label} ${(t.Status || "").padEnd(9)} ${t.Task}${t["Due Date"] ? `  · due ${ymd(t["Due Date"])}` : ""}`);
     P(`  Rocks:`);
     for (const r of pw.rocks || [])
       P(`      ${r.Rock}  (${r.Retro || r.Status || "?"})`);

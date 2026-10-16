@@ -74,7 +74,7 @@ function render(b) {
       P("");
       const planned = planRow ? laneText(planRow, overall) : "";
       const recapped = recapOpener(recapRow);
-      P(`  ${label}`);
+      P(`  ${label}   plan ${planRow ? planRow.Status || "?" : "no row"} · recap ${recapRow ? recapRow.Status || "?" : "no row"}`);
       P(`    planned: ${planned || (planRow ? "(no Overall written)" : "(no plan row)")}`);
       P(`    recap:   ${recapped || (recapRow ? `(empty · ${recapRow.Status || "?"})` : "(no recap row)")}`);
       // Lanes (My-else-AI) beneath — what last month was meant to be about.
