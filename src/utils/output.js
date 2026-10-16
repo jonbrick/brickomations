@@ -198,7 +198,14 @@ function syncResults(results, options = {}) {
 
   // Skipped section
   if (skipped.length > 0) {
-    const skipReason = skipped[0]?.reason || "duplicates";
+    // One reason → name it; several → count them (the per-item lines carry each).
+    const skipReasons = [...new Set(skipped.map((s) => s.reason).filter(Boolean))];
+    const skipReason =
+      skipReasons.length === 0
+        ? "duplicates"
+        : skipReasons.length === 1
+        ? skipReasons[0]
+        : `${skipReasons.length} reasons`;
     console.log(`${EMOJI.skip} Skipped: ${skipped.length} (${skipReason})`);
     const itemsToShow = skipped.slice(0, detailLimit);
     itemsToShow.forEach((item) => {

@@ -511,10 +511,19 @@ async function syncToCalendar(integrationId, startDate, endDate, options = {}) {
       try {
         // Transform to calendar event format
         const transformed = transformFn(record, repo);
-        if (!transformed) {
+        if (!transformed || transformed.skipped) {
+          // Name + the transformer's own reason, so the log reads
+          // "Mt. Whitney — Status 🛑 Won't Do" rather than "Unknown - Missing
+          // date or trip name" (every skip used to wear the source's one
+          // generic skipReason, and no name was kept).
           results.skipped.push({
             id: record.id,
-            reason: metadata.skipReason || "Transformer returned null",
+            pageId: record.id,
+            displayName: getDisplayName(record, repo, integrationConfig),
+            reason:
+              (transformed && transformed.reason) ||
+              metadata.skipReason ||
+              "Transformer returned null",
           });
           continue;
         }

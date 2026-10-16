@@ -271,6 +271,17 @@ async function handleCalendarSync(sourceId, startDate, endDate, action) {
   // deletions (e.g. cleaning up junk rows) never propagate to the calendar.
   const aggregateByDay = INTEGRATIONS[sourceId].aggregateByDay === true;
 
+  // Full-DB sources (Events, Trips) reconcile everything every run. The
+  // workflow widens its own window to ±5 years, but this pre-fetch kept the
+  // caller's ±3 days and returned early on a quiet week — a Trips-wide change
+  // with no trip near today never pushed (Fri 2026-10-16). Same span as the
+  // workflow, so the empty check and the summary count see the whole DB.
+  if (INTEGRATIONS[sourceId].databaseConfig?.syncEntireDb) {
+    const now = new Date();
+    startDate = new Date(now.getFullYear() - 5, 0, 1);
+    endDate = new Date(now.getFullYear() + 5, 11, 31, 23, 59, 59, 999);
+  }
+
   // Get records based on pattern
   let records;
   if (aggregateByDay || useHybridPattern) {

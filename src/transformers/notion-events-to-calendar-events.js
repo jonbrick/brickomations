@@ -26,7 +26,8 @@ function extractEmoji(subcategory) {
  * Transform Notion event record to Google Calendar event
  * @param {Object} record - Notion page object
  * @param {Object} repo - IntegrationDatabase instance
- * @returns {Object|null} Object with { calendarId, event } or null if invalid
+ * @returns {Object} { calendarId, event }, or { skipped: true, reason } when the
+ *   record must not reach the calendar (skip status, missing date or name)
  */
 function transformEventToCalendarEvent(record, repo) {
   const props = config.notion.properties.events;
@@ -37,7 +38,9 @@ function transformEventToCalendarEvent(record, repo) {
     config.notion.getPropertyName(props.status)
   );
   if (status && CALENDAR_SKIP_STATUSES.includes(status)) {
-    return null;
+    // Named skip: the workflow logs the record + this reason instead of the
+    // source's one generic skipReason ("Unknown - Missing date or trip name").
+    return { skipped: true, reason: `Status ${status}` };
   }
 
   // Extract properties using config property names
@@ -76,7 +79,7 @@ function transformEventToCalendarEvent(record, repo) {
     config.notion.getPropertyName(props.date)
   );
   if (!dateRange || !eventName) {
-    return null; // Skip if missing required fields
+    return { skipped: true, reason: !dateRange ? "Missing date" : "Missing event name" };
   }
 
   // Build summary with emoji prefix
