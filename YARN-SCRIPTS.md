@@ -126,6 +126,12 @@ cd ~/projects/brickomations && yarn --silent month:view <MM>
                             # local/plan/month-bundle-<MM>.json. month:bundle
                             # <MM> emits the JSON alone
 
+cd ~/projects/brickomations && yarn --silent goals:view
+                            # every 2026 goal by theme — status, date,
+                            # statement, linked projects/tasks/events, and
+                            # the number the data holds (weight, BP, reading,
+                            # cooking); stages local/plan/goals-bundle.json
+
 cd ~/projects/brickomations && node scripts/retro-weeks.js personal
                             # which weeks still need retro work (arg:
                             # personal or work)

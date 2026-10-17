@@ -218,6 +218,11 @@ function loadJson(name) {
 // Task statuses that mean "off the board" — settled in Notion or dropped from
 // Linear. Anything else is open.
 const SETTLED = new Set(["🟢 Done", "🛑 Canceled", "🫥 Gone"]);
+// Goal statuses that mean "not this year's work" — achieved, pushed to next
+// year, or cancelled. The 🌄 2026 Goals enum also carries Ice Box / Blocked /
+// Considering / To Do / To Book / Scheduled / Doing, all of which stay live.
+// Canon: notion-conventions § 2026 Goals.
+const GOAL_CLOSED = new Set(["🟢 Done", "↗️ Next Year", "❌ Cancelled"]);
 const PROJECTS_RELATION = "💎 2026 Projects";
 
 // Open-task count per project id, from the tasks' project relation. Notion's
@@ -446,7 +451,7 @@ function buildBundle(wk) {
     },
     inputs: {
       goals: (life.goals || [])
-        .filter((g) => g.Status !== "🟢 Done")
+        .filter((g) => !GOAL_CLOSED.has(g.Status))
         .map(stripKeepId),
       personalProjects: (life.personalProjects || [])
         .filter((p) => p.Category !== "💼 Work" && p.Status !== "🟢 Done")
@@ -556,6 +561,7 @@ module.exports = {
   openTaskCounts,
   undatedBacklog,
   SETTLED,
+  GOAL_CLOSED,
   PLAN_OVERHANG_DAYS,
   WEEKS_RELATION,
   MONTHS_RELATION,

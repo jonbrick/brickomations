@@ -66,11 +66,21 @@ function monthPlanLines(label, row, overallLane, lanes, indent = "    ") {
   return out;
 }
 
-// Status order for project lists: active first, parked last.
+// Status order for goal + project lists: active first, parked last. Goals
+// carry the wider 🌄 2026 Goals enum (notion-conventions § 2026 Goals);
+// projects use 🔵 Doing / 🔴 To Do / 🧊 Icebox. Unknown values sort last.
 const STATUS_RANK = {
   "🔵 Doing": 0,
-  "🔴 To Do": 1,
-  "🧊 Icebox": 2,
+  "🟡 Scheduled": 1,
+  "🟠 To Book": 1,
+  "🔴 To Do": 2,
+  "🟣 Considering": 3,
+  "⏸️ Blocked": 3,
+  "🧊 Ice Box": 4,
+  "🧊 Icebox": 4,
+  "🟢 Done": 8,
+  "↗️ Next Year": 9,
+  "❌ Cancelled": 9,
 };
 const statusRank = (s) => (s in STATUS_RANK ? STATUS_RANK[s] : 9);
 const PRIORITY_RANK = { Urgent: 0, High: 1, Medium: 2, Med: 2, Low: 3 };
@@ -179,6 +189,7 @@ function portfolioLines(inputs, opts = {}) {
 
 module.exports = {
   portfolioLines,
+  statusRank,
   monthPlanLines,
   laneText,
   pretty,
