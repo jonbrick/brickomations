@@ -16,8 +16,8 @@
 
 const fs = require("fs");
 const path = require("path");
-const { loadJson, SETTLED } = require("./plan-bundle");
-const { pretty, ymd } = require("./render-portfolio");
+const { loadJson, SETTLED, GOAL_CLOSED } = require("./plan-bundle");
+const { pretty, ymd, statusRank } = require("./render-portfolio");
 
 const GOALS_RELATION_ON_PROJECT = "🏆 Goal";
 const PROJECTS_RELATION_ON_GOAL = "🔨 2026 Projects";
@@ -29,10 +29,6 @@ const THEMES_RELATION_ON_GOAL = "🏔️ 2026 Themes";
 
 const YEAR = 2026;
 const YEAR_END = `${YEAR}-12-31`;
-
-// Status order: active first, parked last (mirrors render-portfolio).
-const STATUS_RANK = { "🔵 Doing": 0, "🔴 To Do": 1, "🟢 Done": 2 };
-const statusRank = (s) => (s in STATUS_RANK ? STATUS_RANK[s] : 9);
 
 // Day math on YYYY-MM-DD strings (UTC — no timezone drift).
 const toUTC = (s) => {
@@ -172,7 +168,7 @@ function buildGoalsBundle() {
     const signals = signal ? signal.render({ collected, habitsYTD, today }) : [];
 
     const goalDate = ymd(g["Goal Date"]);
-    const isDone = g.Status === "🟢 Done";
+    const isClosed = GOAL_CLOSED.has(g.Status);
     return {
       _notionId: id,
       name: g.Name,
@@ -181,7 +177,8 @@ function buildGoalsBundle() {
       doneBy: g["Done by..."],
       goalDate,
       achievedDate: ymd(g["Achieved Date"]) || null,
-      pastDate: !isDone && goalDate && goalDate < today,
+      closed: isClosed,
+      pastDate: !isClosed && goalDate && goalDate < today,
       clarifying: g["Clarifying Statement"] || "",
       themeIds: g[THEMES_RELATION_ON_GOAL] || [],
       projects: goalProjects.map((p) => ({
@@ -247,9 +244,8 @@ function buildGoalsBundle() {
     daysLeft: daysBetween(today, YEAR_END),
     counts: {
       total: goalRows.length,
-      done: goalRows.filter((g) => g.status === "🟢 Done").length,
-      doing: goalRows.filter((g) => g.status === "🔵 Doing").length,
-      toDo: goalRows.filter((g) => g.status === "🔴 To Do").length,
+      byStatus: [...goalRows.reduce((m, g) => m.set(g.status || "?", (m.get(g.status || "?") || 0) + 1), new Map())]
+        .sort((a, b) => statusRank(a[0]) - statusRank(b[0])),
       pastDate: goalRows.filter((g) => g.pastDate).length,
     },
     themes: themeRows,
@@ -271,18 +267,18 @@ function render(b) {
   P(RULE);
   P("");
   const c = b.counts;
-  P(
-    `  ${c.total} goals  ·  ${c.done} done  ·  ${c.doing} doing  ·  ${c.toDo} to do  ·  ${c.pastDate} past their date`
-  );
+  P(`  ${c.total} goals  ·  ${c.byStatus.map(([st, n]) => `${n} ${st}`).join("  ·  ")}  ·  ${c.pastDate} past their date`);
 
   const goalBlock = (g) => {
     P("");
     const when = g.achievedDate
       ? `achieved ${pretty(g.achievedDate)}`
-      : `${g.doneBy || "by"} ${g.goalDate ? pretty(g.goalDate) : "?"}${g.pastDate ? "  ⚠ PAST DATE" : ""}`;
+      : g.closed
+        ? "closed"
+        : `${g.doneBy || "by"} ${g.goalDate ? pretty(g.goalDate) : "?"}${g.pastDate ? "  ⚠ PAST DATE" : ""}`;
     P(`  ${(g.status || "").padEnd(9)} ${g.name}   (${g.category || "?"} · ${when})`);
     for (const ln of wrap(g.clarifying, 86, I)) P(ln);
-    if (g.status === "🟢 Done") return; // closed goals get the one line + statement
+    if (g.closed) return; // Done / Next Year / Cancelled get the one line + statement
     if (g.projects.length) {
       P(`${I}projects`);
       for (const p of g.projects)

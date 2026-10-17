@@ -22,6 +22,7 @@ const {
   openTaskCounts,
   undatedBacklog,
   SETTLED,
+  GOAL_CLOSED,
   WEEKS_RELATION,
   MONTHS_RELATION,
 } = require("./plan-bundle");
@@ -162,7 +163,7 @@ function buildMonthBundle(mm) {
     upcoming: upcomingEventsTrips(plan, end, LOOKAHEAD_DAYS),
     inputs: {
       goals: (life.goals || [])
-        .filter((g) => g.Status !== "🟢 Done")
+        .filter((g) => !GOAL_CLOSED.has(g.Status))
         .map(stripKeepId),
       themes: (life.themes || []).map(strip),
       personalProjects: (life.personalProjects || [])
