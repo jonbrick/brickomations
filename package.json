@@ -30,6 +30,7 @@
     "plan:view": "node cli/plan-view.js",
     "month:bundle": "node cli/month-bundle.js",
     "month:view": "node cli/month-view.js",
+    "goals:view": "node cli/goals-view.js",
     "generate": "node cli/generate-year.js",
     "tokens:check": "node cli/tokens/check.js",
     "tokens:refresh": "node cli/tokens/refresh.js",
