@@ -41,9 +41,9 @@ install_one "com.brickomations.pull-linear" # caches Linear projects + assigned 
 install_one "com.brickomations.app-launcher"
 install_one "com.brickomations.watchdog"   # push-based heartbeat; reads ping files
 install_one "com.brickomations.caffeinate" # holds idle sleep off 05:45–23:30 daily
-install_one "com.brickomations.daily-text-morning" # texts today's note digest at 06:20
-install_one "com.brickomations.evening-render"      # fills Completed Tasks/Events at 21:15 (before the evening text)
-install_one "com.brickomations.daily-text-evening"  # texts the day's recaps at 21:20
+install_one "com.brickomations.daily-text-morning" # texts ### MORNING SUMMARY at 06:20 (polls to 06:35)
+install_one "com.brickomations.evening-render"      # fills Tasks/Completed Events/Calendar at 21:15 (before the 21:20 processor)
+install_one "com.brickomations.daily-text-evening"  # texts ### Evening Summary at 21:45 (polls to 22:00)
 
 echo ""
 echo "Done."

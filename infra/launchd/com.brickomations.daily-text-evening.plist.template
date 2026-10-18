@@ -5,13 +5,12 @@
     <key>Label</key>
     <string>com.brickomations.daily-text-evening</string>
 
-    <!-- Texts a plain-text digest of today's daily note (evening sections: the    -->
-    <!-- day's meeting recaps) with a tappable obsidian:// link. Fires 20 min       -->
-    <!-- after the 9 PM Cowork evening-processor, so the recaps are written.        -->
-    <!-- No wakelock wrapper: 21:20 sits inside the daily caffeinate window         -->
-    <!-- (06:00-23:30) and the script exits in seconds (osascript is timeout-       -->
-    <!-- bounded in the script). No heartbeat/watchdog: the delivered text is its   -->
-    <!-- own success signal — a missing text is self-evident.                       -->
+    <!-- Texts today's ### Evening Summary (the exec-assistant paragraphs the 9:20   -->
+    <!-- PM Cowork evening-processor writes) with a tappable obsidian:// link.      -->
+    <!-- Fires 21:45; the script polls the note until the summary lands or 22:00,   -->
+    <!-- then falls back to ### Tasks. Bounded: worst case ~15 min, inside the      -->
+    <!-- daily caffeinate window (05:45-23:30); osascript is timeout-bounded.       -->
+    <!-- No heartbeat/watchdog: the delivered text is its own success signal.       -->
     <key>ProgramArguments</key>
     <array>
         <string>/opt/homebrew/bin/node</string>
@@ -23,7 +22,7 @@
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key><integer>21</integer>
-        <key>Minute</key><integer>20</integer>
+        <key>Minute</key><integer>45</integer>
     </dict>
 
     <key>StandardOutPath</key>

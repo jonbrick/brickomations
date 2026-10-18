@@ -15,7 +15,7 @@
 #   pull-linear                 — 6:30 AM
 #   yarn-sync                   — every 2 hr, 7 AM–11 PM (7, 9, 11 AM, 1, 3, 5, 7, 9, 11 PM)
 #   cowork-morning-brief        — 6 AM
-#   cowork-evening-processor    — 9 PM
+#   cowork-evening-processor    — 9:20 PM (after the 9:15 PM evening render)
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -177,6 +177,6 @@ check_job "yarn-sync" \
 
 check_job "cowork-morning-brief" "06:00" 1800
 
-check_job "cowork-evening-processor" "21:00" 1800
+check_job "cowork-evening-processor" "21:20" 1800
 
 exit 0

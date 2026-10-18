@@ -26,15 +26,16 @@
  * the plan to the evening life.json by Notion ID when the snapshot carries one, else
  * by normalized title (rename-safe once the ID lands).
  *
- * NOT built here — these need an LLM/Cowork step and land as a fast-follow:
- *   - the top ### Recap (plan-vs-actual narrative)
- *   - the ### Training & Meals actual
- *   - folding SHORT meeting gists into the Work list (### Work Meetings stays its
- *     own detailed section until the processor emits short gists)
+ * NOT built here (LLM work, done by Cowork):
+ *   - ### Evening Summary — the plan-vs-actual narrative that is the 9:45 PM text.
+ *     Written by the PM Evening Processor (Step 4.7) at ~9:20 PM, AFTER this render,
+ *     from the sections this script fills. The processor skips it if this hasn't run.
+ *   - the ### Training & Meals actual (still a fast-follow)
  *
  * Scheduling (com.brickomations.evening-render): fires 21:15, AFTER the 9 PM yarn sync
- * refreshes the JSON and the evening-processor writes meeting recaps, BEFORE the
- * 9:20 PM evening text reads the note.
+ * refreshes the JSON, BEFORE the 9:20 PM evening-processor (meeting recaps + Evening
+ * Summary) and the 9:45 PM evening text. The ### Tasks / ### Calendar it writes are
+ * the processor's ordering guard — leave the 21:15 slot ahead of the processor.
  *
  * Usage:
  *   node scripts/render-evening-report.js [--date YYYY-MM-DD] [--dry-run]
