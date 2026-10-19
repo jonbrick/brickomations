@@ -15,7 +15,7 @@
 #   pull-linear                 — 6:30 AM
 #   yarn-sync                   — every 2 hr, 7 AM–11 PM (7, 9, 11 AM, 1, 3, 5, 7, 9, 11 PM)
 #   cowork-morning-brief        — 6 AM
-#   cowork-evening-processor    — 9 PM
+#   cowork-evening-processor    — 9:20 PM (after the 9:15 PM evening render)
 #   granola-sync                — every 30 min while Obsidian is open (pull-based;
 #                                 reads the plugin's own state — see check_granola_sync)
 #
@@ -279,7 +279,7 @@ check_job "yarn-sync" \
 
 check_job "cowork-morning-brief" "06:00" 1800
 
-check_job "cowork-evening-processor" "21:00" 1800
+check_job "cowork-evening-processor" "21:20" 1800
 
 check_granola_sync
 

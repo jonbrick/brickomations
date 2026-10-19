@@ -1,26 +1,34 @@
 #!/usr/bin/env node
 /**
- * send-daily-text.js — text yourself a plain-text mirror of one zone of the day's
- * Obsidian daily note, with a tappable obsidian:// deep link for hand-edits.
+ * send-daily-text.js — text yourself the day's summary from the Obsidian daily note,
+ * with a tappable obsidian:// deep link back into the note.
  *
- * 1:1 zone lift: the daily note is authored to BE the message. Each slot lifts one
- * whole `## ` zone verbatim and renders it plain — no section cherry-picking, no
- * reordering, no reworded headers. The note is the source of truth; this script is a
- * read-only mirror. It never edits the note.
+ * Exec-assistant model (2026-10-18): the text is no longer a mirror of the note.
+ * Each slot lifts ONE subsection — the short prose summary the Cowork task writes —
+ * and sends it as paragraphs, plus the note header and the link. The rest of the
+ * zone (calendar, task lists, meeting recaps) stays in the note, one tap away.
  *
- *   morning → ## Morning Brief   (at a glance · birthdays · events · calendar · training/meals · tasks)
- *   evening → ## Evening Report  (completed tasks · completed events · workout/etc · meeting recaps)
+ *   morning → ## Morning Brief  › ### MORNING SUMMARY   (AM Morning Brief, Step 6.5)
+ *   evening → ## Evening Report › ### Evening Summary   (PM Evening Processor, Step 4.7)
  *
- * Rendering is minimal (content stays 1:1 with the note):
- *   - `### Subsection` → a plain label line
- *   - `[[wikilinks]]` → display text; a trailing `— from [[note]]` provenance link is dropped
- *   - `**bold**` / `_italic_` / `` `code` `` markers stripped; `- ` bullets → `• `
- *   - subsections whose only content is an italic placeholder (`_no meetings_`) are skipped
- *   - if the whole zone is placeholders (nothing real happened) → nothing is sent
+ * Waiting: the Cowork tasks start with a randomized delay and run for a variable
+ * time, so a live send for TODAY polls the note every 30 s until the summary lands
+ * or the slot's deadline passes (morning 06:35, evening 22:00). Bounded by design —
+ * see the automation readme, "Bounded runtime is load-bearing".
+ *
+ * Fallback: no summary by the deadline → send the slot's fallback subsection
+ * instead (morning ### AT A GLANCE, evening ### Tasks), prefixed "(no summary
+ * today)", so a dead Cowork run still produces a useful text. Fallback empty too →
+ * nothing is sent (empty-night suppress).
+ *
+ * Rendering (summary): paragraphs preserved (blank line = paragraph), [[wikilinks]]
+ * → display text, bold / italic / code markers stripped, `Thu 2026-09-03` → `Thu 9/3`
+ * (the note keeps absolute dates; the phone gets the short form).
  *
  * Usage:
- *   node scripts/send-daily-text.js [--date YYYY-MM-DD] [--slot morning|evening] [--dry-run]
+ *   node scripts/send-daily-text.js [--date YYYY-MM-DD] [--slot morning|evening] [--dry-run] [--no-wait]
  *
+ * --dry-run and --date <not today> never wait; --no-wait skips the poll on a live send.
  * The recipient number is read from brickomations's .env (ALERT_IMESSAGE_TARGET),
  * never hardcoded. Dry-run needs no send config at all.
  */
@@ -34,19 +42,37 @@ const VAULT_DIR = path.join(os.homedir(), "projects", "brickocampus");
 const VAULT_NAME = "brickocampus";
 const BRICKOMATIONS_DIR = path.join(os.homedir(), "projects", "brickomations");
 
-// Each slot lifts exactly one `## ` zone from the daily note, verbatim.
-const ZONE_FOR_SLOT = {
-  morning: "Morning Brief",
-  evening: "Evening Report",
+// Each slot lifts exactly one `### ` subsection out of one `## ` zone. `fallback`
+// (same zone) is what goes out when the summary never lands by `deadline` (local
+// HH:MM, today). Subsections are resolved INSIDE the zone — `### Tasks` exists in
+// both zones in different case, so a file-global heading match would be wrong.
+const SLOTS = {
+  morning: {
+    zone: "Morning Brief",
+    summary: "MORNING SUMMARY",
+    fallback: "AT A GLANCE",
+    deadline: "06:35",
+  },
+  evening: {
+    zone: "Evening Report",
+    summary: "Evening Summary",
+    fallback: "Tasks",
+    deadline: "22:00",
+  },
 };
+
+const POLL_INTERVAL_MS = 30 * 1000;
+const NO_SUMMARY_PREFIX = "(no summary today)";
+const LINK_LABEL = "Tap to open in Obsidian:";
 
 // ---- args -----------------------------------------------------------------
 
 function parseArgs(argv) {
-  const args = { date: null, slot: "morning", dryRun: false };
+  const args = { date: null, slot: "morning", dryRun: false, noWait: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--dry-run") args.dryRun = true;
+    else if (a === "--no-wait") args.noWait = true;
     else if (a === "--date") args.date = argv[++i];
     else if (a.startsWith("--date=")) args.date = a.slice("--date=".length);
     else if (a === "--slot") args.slot = argv[++i];
@@ -86,16 +112,14 @@ function resolveNote(dateISO) {
   return { abs, relNoExt };
 }
 
-// ---- zone extraction ------------------------------------------------------
+// ---- zone / subsection extraction -----------------------------------------
 
 // Pre-2026-08-03 notes carry `## Logs` where the Evening Report zone now lives.
-// Only matters for manual `--date` runs on historical notes — today/future notes
-// use the new heading. Mirrors the evening-processor's legacy fallback.
+// Only matters for manual `--date` runs on historical notes.
 const LEGACY_ALIASES = { "Evening Report": ["Logs"] };
 
-// Body lines of a `## <zone>` — everything up to the next H2, a `---` rule, or EOF.
-// INCLUDES the zone's `### ` subheadings and their bodies (that's the whole point:
-// we lift the entire zone). Returns null if the zone (and any legacy alias) is absent.
+// Body lines of a `## <zone>` — everything up to the next H2, a `---` rule, or EOF,
+// INCLUDING the zone's `### ` subheadings. null if the zone (and any alias) is absent.
 function extractZone(lines, zone) {
   const candidates = [zone, ...(LEGACY_ALIASES[zone] || [])];
   let startIdx = -1;
@@ -114,6 +138,19 @@ function extractZone(lines, zone) {
   return body;
 }
 
+// Body lines of `### <heading>` inside a zone body — up to the next `### `, or the
+// end of the zone. Exact heading match. null if the subsection is absent.
+function extractSubsection(zoneBody, heading) {
+  const idx = zoneBody.findIndex((l) => l.trim() === `### ${heading}`);
+  if (idx === -1) return null;
+  const body = [];
+  for (let i = idx + 1; i < zoneBody.length; i++) {
+    if (/^###\s/.test(zoneBody[i])) break;
+    body.push(zoneBody[i]);
+  }
+  return body;
+}
+
 // ---- markdown -> plain text -----------------------------------------------
 
 function cleanInline(text) {
@@ -125,12 +162,26 @@ function cleanInline(text) {
     .replace(/_([^_\n]+)_/g, "$1"); // italic
 }
 
-// Non-blank, non-comment content of a subsection body (raw, pre-clean).
-// Skips whole HTML comment blocks, including multi-line ones — their interior
-// lines don't start with `<!--`, and letting them through made a placeholder-only
-// section (a template comment above `_no meetings_`) read as real content, which
-// defeated both this-section suppression and the empty-night suppress. Mirrors the
-// inComment tracking in cleanBody().
+// `Thu 2026-09-03` → `Thu 9/3` (year dropped when it's the current year, else
+// `Thu 9/3/25`); a bare `2026-09-03` → `9/3`. The note keeps absolute dates — the
+// short form is a phone-only rendering.
+const WEEKDAY_DATE_RE = /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{4})-(\d{2})-(\d{2})\b/g;
+const BARE_DATE_RE = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
+
+function shortDate(y, m, d, now) {
+  const md = `${Number(m)}/${Number(d)}`;
+  return Number(y) === now.getFullYear() ? md : `${md}/${String(y).slice(2)}`;
+}
+
+function shortenDates(text, now = new Date()) {
+  return text
+    .replace(WEEKDAY_DATE_RE, (_m, wd, y, mo, d) => `${wd} ${shortDate(y, mo, d, now)}`)
+    .replace(BARE_DATE_RE, (_m, y, mo, d) => shortDate(y, mo, d, now));
+}
+
+// Non-blank, non-comment content of a subsection body (raw, pre-clean). Skips whole
+// HTML comment blocks, including multi-line ones, so a template comment above a
+// placeholder doesn't read as real content.
 function realBodyLines(rawBody) {
   const out = [];
   let inComment = false;
@@ -150,14 +201,16 @@ function realBodyLines(rawBody) {
   return out;
 }
 
-// A subsection whose only content is italic placeholders (e.g. "_no meetings_")
-// carries nothing — skip it rather than print a "Header / no X" line.
+const isPlaceholderLine = (l) => /^_.+_$/.test(l.trim());
+
+// A subsection whose only content is italic placeholders (`_no tasks_`,
+// `_not written yet_`) carries nothing.
 function isPlaceholderOnly(rawBody) {
   const real = realBodyLines(rawBody);
-  return real.length > 0 && real.every((l) => /^_.+_$/.test(l));
+  return real.length > 0 && real.every(isPlaceholderLine);
 }
 
-// Clean a subsection body into compact plain-text lines.
+// Fallback rendering: compact plain-text lines, blank lines dropped, `- ` → `• `.
 function cleanBody(rawBody) {
   const out = [];
   let inFence = false;
@@ -181,6 +234,41 @@ function cleanBody(rawBody) {
   return out;
 }
 
+// Summary rendering: paragraphs survive (a blank line in the note is a paragraph
+// break on the phone), comments / fences / italic placeholders are dropped, inline
+// markdown is cleaned, dates are shortened. "" when there's nothing real.
+function cleanSummary(rawBody, now = new Date()) {
+  const paragraphs = [];
+  let current = [];
+  let inFence = false;
+  let inComment = false;
+  const flush = () => {
+    if (current.length) paragraphs.push(current.join("\n"));
+    current = [];
+  };
+  for (const raw of rawBody) {
+    const line = raw.replace(/\s+$/, "");
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    if (line.includes("<!--")) inComment = true;
+    if (inComment) {
+      if (line.includes("-->")) inComment = false;
+      continue;
+    }
+    if (line.trim() === "") {
+      flush();
+      continue;
+    }
+    if (isPlaceholderLine(line)) continue;
+    current.push(cleanInline(line.replace(/^(\s*)-\s+/, "$1• ")).trim());
+  }
+  flush();
+  return shortenDates(paragraphs.join("\n\n"), now);
+}
+
 // ---- message assembly -----------------------------------------------------
 
 function buildHeader(lines) {
@@ -191,54 +279,91 @@ function buildHeader(lines) {
   return weekMatch ? `${dateLabel} · Week ${weekMatch[1]}` : dateLabel;
 }
 
-// Split a zone body into { title, rawBody } subsections keyed by `### ` headings,
-// then render each (skipping placeholder-only ones) into a labeled text block.
-function renderZone(zoneBody) {
-  const subs = [];
-  let current = null;
-  for (const l of zoneBody) {
-    const h3 = l.match(/^###\s+(.*)$/);
-    if (h3) {
-      current = { title: h3[1].trim(), rawBody: [] };
-      subs.push(current);
-      continue;
-    }
-    if (!current) {
-      // Content before any ### (a zone-level comment or stray line) — bucket headless.
-      current = { title: null, rawBody: [] };
-      subs.push(current);
-    }
-    current.rawBody.push(l);
-  }
-
-  const blocks = [];
-  for (const s of subs) {
-    if (isPlaceholderOnly(s.rawBody)) continue;
-    const cleaned = cleanBody(s.rawBody);
-    if (cleaned.length === 0) continue;
-    blocks.push((s.title ? `${s.title}\n` : "") + cleaned.join("\n"));
-  }
-  return blocks;
+// True when the slot's summary subsection holds real prose (not empty, not a placeholder).
+function hasSummary(lines, slot, now = new Date()) {
+  const cfg = SLOTS[slot];
+  const zoneBody = extractZone(lines, cfg.zone);
+  if (!zoneBody) return false;
+  const raw = extractSubsection(zoneBody, cfg.summary);
+  return !!raw && cleanSummary(raw, now).length > 0;
 }
 
-function buildMessage({ lines, zone, relNoExt }) {
-  const zoneBody = extractZone(lines, zone);
+function buildMessage({ lines, slot, relNoExt, now = new Date() }) {
+  const cfg = SLOTS[slot];
+  if (!cfg) throw new Error(`Unknown slot "${slot}"`);
+  const zoneBody = extractZone(lines, cfg.zone);
   if (zoneBody === null) {
-    return { message: null, reason: `zone "## ${zone}" not found in note` };
+    return { message: null, reason: `zone "## ${cfg.zone}" not found in note`, usedFallback: false };
   }
-  const blocks = renderZone(zoneBody);
-  if (blocks.length === 0) {
-    return { message: null, reason: "nothing real in the zone — empty-night suppress" };
-  }
+  const header = buildHeader(lines);
   const link =
     `obsidian://open?vault=${VAULT_NAME}` +
     `&file=${encodeURIComponent(relNoExt)}`;
-  const parts = [
-    buildHeader(lines),
-    ...blocks,
-    `Tap to open & edit in Obsidian:\n${link}`,
-  ];
-  return { message: parts.join("\n\n"), reason: null };
+  const linkBlock = `${LINK_LABEL}\n${link}`;
+
+  const summaryRaw = extractSubsection(zoneBody, cfg.summary);
+  const summary = summaryRaw ? cleanSummary(summaryRaw, now) : "";
+  if (summary) {
+    return { message: [header, summary, linkBlock].join("\n\n"), reason: null, usedFallback: false };
+  }
+
+  const fallbackRaw = extractSubsection(zoneBody, cfg.fallback);
+  const fallback =
+    fallbackRaw && !isPlaceholderOnly(fallbackRaw)
+      ? cleanBody(fallbackRaw).map((l) => shortenDates(l, now))
+      : [];
+  if (fallback.length === 0) {
+    return {
+      message: null,
+      reason: `no ### ${cfg.summary} and nothing real in ### ${cfg.fallback} — empty-night suppress`,
+      usedFallback: false,
+    };
+  }
+  const body = `${NO_SUMMARY_PREFIX}\n\n${cfg.fallback}\n${fallback.join("\n")}`;
+  return { message: [header, body, linkBlock].join("\n\n"), reason: null, usedFallback: true };
+}
+
+// ---- waiting --------------------------------------------------------------
+
+function sleepMs(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+// Epoch ms of today's `HH:MM` (local time).
+function deadlineEpoch(hhmm, now = new Date()) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const d = new Date(now);
+  d.setHours(h, m, 0, 0);
+  return d.getTime();
+}
+
+// Read the note. On a live send for today (`wait`), keep re-reading until the
+// summary has landed or the slot deadline passes — the note itself may not exist
+// yet in the first minutes of the morning window. Returns the note + its lines.
+function readNoteWithWait({ dateISO, slot, wait }) {
+  const cfg = SLOTS[slot];
+  const deadline = deadlineEpoch(cfg.deadline);
+  let attempts = 0;
+  for (;;) {
+    attempts++;
+    const timeLeft = deadline - Date.now();
+    let note = null;
+    let err = null;
+    try {
+      note = resolveNote(dateISO);
+    } catch (e) {
+      err = e;
+    }
+    if (note) {
+      const lines = fs.readFileSync(note.abs, "utf8").split("\n");
+      if (!wait || timeLeft <= 0 || hasSummary(lines, slot)) {
+        return { ...note, lines, attempts };
+      }
+    } else if (!wait || timeLeft <= 0) {
+      throw err;
+    }
+    sleepMs(Math.min(POLL_INTERVAL_MS, Math.max(timeLeft, 1000)));
+  }
 }
 
 // ---- send -----------------------------------------------------------------
@@ -277,14 +402,16 @@ end tell`;
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const dateISO = args.date || todayLocalISO();
-  const zone = ZONE_FOR_SLOT[args.slot];
-  if (!zone) {
-    throw new Error(`Unknown slot "${args.slot}" (expected: ${Object.keys(ZONE_FOR_SLOT).join(", ")})`);
+  const cfg = SLOTS[args.slot];
+  if (!cfg) {
+    throw new Error(`Unknown slot "${args.slot}" (expected: ${Object.keys(SLOTS).join(", ")})`);
   }
 
-  const { abs, relNoExt } = resolveNote(dateISO);
-  const lines = fs.readFileSync(abs, "utf8").split("\n");
-  const { message, reason } = buildMessage({ lines, zone, relNoExt });
+  // Only a live send for today waits on the Cowork task; historical / dry runs read once.
+  const wait = !args.dryRun && !args.noWait && dateISO === todayLocalISO();
+  const { abs, relNoExt, lines, attempts } = readNoteWithWait({ dateISO, slot: args.slot, wait });
+  const { message, reason, usedFallback } = buildMessage({ lines, slot: args.slot, relNoExt });
+  const mode = usedFallback ? `fallback (### ${cfg.fallback})` : `summary (### ${cfg.summary})`;
 
   if (message === null) {
     // Empty-night suppress (or missing zone): send nothing, exit cleanly.
@@ -293,7 +420,7 @@ function main() {
   }
 
   if (args.dryRun) {
-    console.log(`[dry-run] date=${dateISO} slot=${args.slot} zone="## ${zone}"`);
+    console.log(`[dry-run] date=${dateISO} slot=${args.slot} mode=${mode}`);
     console.log(`[dry-run] note: ${abs}`);
     console.log(`[dry-run] message length: ${message.length} chars`);
     console.log("\n----- message -----\n");
@@ -304,7 +431,25 @@ function main() {
 
   const target = readAlertTarget();
   sendIMessage(target, message);
-  console.log(`Sent ${args.slot} digest for ${dateISO} to your number.`);
+  console.log(
+    `[send-daily-text] ${dateISO} ${args.slot}: sent ${mode} after ${attempts} read${attempts === 1 ? "" : "s"}.`
+  );
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = {
+  SLOTS,
+  NO_SUMMARY_PREFIX,
+  extractZone,
+  extractSubsection,
+  cleanInline,
+  cleanBody,
+  cleanSummary,
+  shortenDates,
+  isPlaceholderOnly,
+  hasSummary,
+  buildHeader,
+  buildMessage,
+  deadlineEpoch,
+};
