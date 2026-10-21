@@ -58,18 +58,24 @@ send_imessage() {
     echo "DRY RUN — would send: $msg"
     return
   fi
-  local escaped="${msg//\"/\\\"}"
+  # The message travels as an argv item, never interpolated into the script:
+  # no quoting rules to get wrong (a JSON `\"` in a failed ping broke the send
+  # on 2026-10-20 and the pull-linear failure never reached the phone), and
+  # nothing in a log-derived message can expand as shell or AppleScript.
   local script
   script=$(mktemp -t brickomations-watchdog)
-  cat > "$script" <<APPLESCRIPT
-tell application "Messages"
-    set theService to 1st service whose service type = iMessage
-    set theBuddy to buddy "$ALERT_IMESSAGE_TARGET" of theService
-    send "$escaped" to theBuddy
-end tell
+  cat > "$script" <<'APPLESCRIPT'
+on run argv
+    tell application "Messages"
+        set theService to 1st service whose service type = iMessage
+        set theBuddy to buddy (item 1 of argv) of theService
+        send (item 2 of argv) to theBuddy
+    end tell
+end run
 APPLESCRIPT
-  if ! osascript "$script" >/dev/null 2>&1; then
-    echo "Failed to send iMessage: $msg" >&2
+  local err
+  if ! err=$(osascript "$script" "$ALERT_IMESSAGE_TARGET" "$msg" 2>&1 >/dev/null); then
+    echo "Failed to send iMessage (${err:-no error text}): $msg" >&2
   fi
   rm -f "$script"
 }
@@ -171,7 +177,11 @@ check_job() {
   status=$(sed -n 's/.*"status":"\([^"]*\)".*/\1/p' "$ping_file")
   if [ "$status" = "failed" ]; then
     local message
-    message=$(sed -n 's/.*"message":"\([^"]*\)".*/\1/p' "$ping_file")
+    # JSON string with escapes: heartbeat-ping.sh writes `\"` for quotes. The
+    # old pattern stopped at the first escaped quote and lost the rest.
+    message=$(sed -nE 's/.*"message":"(([^"\\]|\\.)*)".*/\1/p' "$ping_file")
+    message=${message//\\\"/\"}
+    message=${message//\\\\/\\}
     local key="failed-${ping_ts_iso}"
     if [ -n "$message" ]; then
       alert "$job" "status=failed: $message" "$key"
@@ -199,6 +209,19 @@ check_job() {
 #      written, so it's a backstop: older than GRANOLA_PROGRESS_SEC means
 #      nothing has landed for days even though cycles run.
 #
+# The vault reads live in scripts/granola-state.js, not here. The vault is
+# Obsidian's iCloud container and macOS TCC guards it: a shell script run by
+# launchd is a platform binary tccd never prompts for and never checks Files &
+# Folders grants for, so every `ls` under <vault>/.obsidian/ is denied at the
+# kernel ("Sandbox) System Policy: bash deny file-read-data"). That read as
+# "no debug log" every morning from Mon 2026-10-19 (check deployed) to Tue
+# 2026-10-20. Node is not a platform binary and already holds the grant on
+# the mini — it's what every other vault-touching job runs as — so the helper
+# does the reads and prints key=value lines; this function keeps the
+# thresholds and alert logic. Verified 2026-10-20 with a throwaway launchd
+# agent: bash `ls` DENIED, node from inside the same script ALLOWED.
+# Rule: launchd shell scripts can't read the vault; vault reads go through node.
+#
 # Alert keys include today's date → one text per condition per day while
 # the condition holds. Lesson learned 2026-10-16: the plugin stalled silently
 # for 36 days (Granola encrypted its local credentials on 2026-09-10; the old
@@ -206,10 +229,21 @@ check_job() {
 # ---------------------------------------------------------------------------
 VAULT_DIR="${BRICKOCAMPUS_DIR:-$HOME/projects/brickocampus}"
 GRANOLA_PLUGIN_DIR="$VAULT_DIR/.obsidian/plugins/granola-sync"
+GRANOLA_STATE_JS="$REPO_ROOT/scripts/granola-state.js"
 GRANOLA_WINDOW_START="07:00"   # local time — the mini wakes 05:45; first cycle lands by ~06:30
 GRANOLA_WINDOW_END="23:00"     # caffeinate releases 23:30
 GRANOLA_LIVENESS_SEC=7200      # 4 missed 30-min cycles
 GRANOLA_PROGRESS_SEC=$((4 * 86400))
+# launchd's PATH is minimal; the plists call node by this absolute path too.
+NODE_BIN="${NODE_BIN:-/opt/homebrew/bin/node}"
+if [ ! -x "$NODE_BIN" ]; then
+  NODE_BIN=$(command -v node 2>/dev/null || true)
+fi
+
+# granola_field <key> <state> — value of one key=value line from the helper.
+granola_field() {
+  printf '%s\n' "$2" | sed -n "s/^$1=//p"
+}
 
 check_granola_sync() {
   local job="granola-sync"
@@ -219,9 +253,21 @@ check_granola_sync() {
     return
   fi
 
-  local data_json="$GRANOLA_PLUGIN_DIR/data.json"
-  if [ ! -f "$data_json" ]; then
-    alert "$job" "plugin data.json missing ($data_json)" "missing-${TODAY}"
+  if [ -z "$NODE_BIN" ]; then
+    alert "$job" "node not found (/opt/homebrew/bin/node missing, NODE_BIN unset) — can't read plugin state" "helper-${TODAY}"
+    return
+  fi
+
+  local state
+  if ! state=$("$NODE_BIN" "$GRANOLA_STATE_JS" "$GRANOLA_PLUGIN_DIR" 2>&1); then
+    # A refused read (TCC / permissions) or a crashed helper. Its own alert,
+    # so it can never masquerade as "no log" — the confusion of 2026-10-20.
+    alert "$job" "state helper failed: $(printf '%s' "$state" | tail -1 | cut -c1-160)" "helper-${TODAY}"
+    return
+  fi
+
+  if [ "$(granola_field data_json "$state")" != "1" ]; then
+    alert "$job" "plugin data.json missing ($GRANOLA_PLUGIN_DIR/data.json)" "missing-${TODAY}"
     return
   fi
 
@@ -229,38 +275,39 @@ check_granola_sync() {
   pgrep -xq Obsidian || obsidian_state="Obsidian NOT running"
 
   # 1. Liveness.
-  local log_file
-  log_file=$(ls -t "$GRANOLA_PLUGIN_DIR"/logs/*.log 2>/dev/null | head -1)
+  local log_file log_epoch
+  log_file=$(granola_field log_file "$state")
   if [ -z "$log_file" ]; then
     alert "$job" "no debug log under .obsidian/plugins/granola-sync/logs — plugin not loaded or debug logging off; $obsidian_state" "nolog-${TODAY}"
     return
   fi
-  local log_epoch
-  log_epoch=$(stat -f '%m' "$log_file")
+  log_epoch=$(granola_field log_mtime_epoch "$state")
+  log_epoch=${log_epoch:-0}
   if [ $((NOW_EPOCH - log_epoch)) -gt "$GRANOLA_LIVENESS_SEC" ]; then
     alert "$job" "no sync cycle since $(date -r "$log_epoch" '+%a %H:%M'); $obsidian_state" "dead-${TODAY}"
     return
   fi
 
-  # 2. Health — last cycle must have listed notes.
-  local last_block
-  last_block=$(awk '/Sync started/ { buf = "" } { buf = buf $0 "\n" } END { printf "%s", buf }' "$log_file")
-  if [ -n "$last_block" ] && ! printf '%s' "$last_block" | grep -q "Listed "; then
-    # Log lines start with an ISO-8601 UTC stamp: 2026-10-16T11:30:00.123Z
-    local started_iso started_epoch
-    started_iso=$(printf '%s' "$last_block" | head -1 | cut -d. -f1)
-    started_epoch=$(date -j -u -f "%Y-%m-%dT%H:%M:%S" "$started_iso" +%s 2>/dev/null || echo 0)
-    if [ "$started_epoch" -gt 0 ] && [ $((NOW_EPOCH - started_epoch)) -gt 180 ]; then
-      local err
-      err=$(printf '%s' "$last_block" | grep '\[ERROR\]' | tail -1 | cut -c1-160)
-      alert "$job" "last cycle $(date -r "$started_epoch" '+%H:%M') did not list notes — API key missing/rejected or network${err:+; $err}" "fail-${TODAY}"
-      return
-    fi
+  # 2. Health — last cycle must have listed notes. Skipped while the block is
+  #    under 3 min old (cycle still running) or its first line didn't parse.
+  #    (The old bash version piped the ~350 KB block through `grep -q` under
+  #    pipefail; grep's early exit SIGPIPE'd printf → status 141 → a false
+  #    "did not list notes". The helper answers with a flag instead.)
+  local started_epoch
+  started_epoch=$(granola_field block_started_epoch "$state")
+  started_epoch=${started_epoch:-0}
+  if [ "$(granola_field block_listed "$state")" != "1" ] \
+     && [ "$started_epoch" -gt 0 ] \
+     && [ $((NOW_EPOCH - started_epoch)) -gt 180 ]; then
+    local err
+    err=$(granola_field block_error "$state")
+    alert "$job" "last cycle $(date -r "$started_epoch" '+%H:%M') did not list notes — API key missing/rejected or network${err:+; $err}" "fail-${TODAY}"
+    return
   fi
 
   # 3. Progress backstop.
   local last_ms
-  last_ms=$(sed -n 's/^[[:space:]]*"latestSyncTime":[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$data_json" | head -1)
+  last_ms=$(granola_field latest_sync_ms "$state")
   if [ -n "$last_ms" ] && [ "$last_ms" -gt 0 ]; then
     local last_s=$((last_ms / 1000))
     if [ $((NOW_EPOCH - last_s)) -gt "$GRANOLA_PROGRESS_SEC" ]; then
