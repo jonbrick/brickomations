@@ -45,6 +45,10 @@
  *                  every other date-aware CLI); --date=X is --from=X --to=X
  * --days and --from/--to are mutually exclusive.
  *
+ * Backlog-state issues never sync — noise in a committed-work DB. They are
+ * dropped right after the fetch, so the Notion gone-pass retires any rows
+ * they left behind.
+ *
  * @layer 1 - Integration (CLI)
  */
 
@@ -305,8 +309,16 @@ async function main() {
   console.log(`  ✓ authenticated as ${viewer.name}`);
 
   const settledWindow = resolveSettledWindow(process.argv);
-  const issues = await linear.getAssignedIssues(settledWindow);
-  console.log(`  ✓ ${issues.length} assigned issues (${settledWindow.label})`);
+  // Backlog-state issues never reach Notion: the Tasks DB holds committed,
+  // dated work, and backlog is noise there (Jon, Thu 2026-10-22). Dropping
+  // them here lets the sync's gone pass retire any rows they left behind;
+  // an issue promoted out of backlog re-enters on the next run.
+  const pulled = await linear.getAssignedIssues(settledWindow);
+  const issues = pulled.filter((node) => node.state.type !== "backlog");
+  console.log(
+    `  ✓ ${issues.length} assigned issues (${settledWindow.label}; ` +
+      `${pulled.length - issues.length} backlog skipped)`
+  );
 
   // The projects leg pulls by assignment (lead or member), all states,
   // scoped to the configured teams — cross-team projects Jon is merely
