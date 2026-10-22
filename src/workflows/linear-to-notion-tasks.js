@@ -23,7 +23,9 @@
 // Reconciliation rules:
 //   - Upsert on `Linear ID` — two consecutive runs produce identical state.
 //   - Status maps by Linear state *type* (never name — team state names
-//     vary), onto a fixed Linear-shaped option set.
+//     vary), onto a fixed Linear-shaped option set. Backlog-state issues
+//     are filtered out upstream; their rows age into 🫥 Gone like any
+//     other absent ID.
 //   - Rows whose Linear ID is absent from the pull (archived, unassigned)
 //     get Status 🫥 Gone — unless already settled (🟢 Done / 🛑 Canceled
 //     rows aging out of the pull window stay as they are). Rows are never
@@ -43,9 +45,10 @@ const {
 const CONFIG_KEY = "linearTasks";
 const GONE_STATUS = "🫥 Gone";
 
+// No backlog entry: cli/pull-linear.js drops backlog-state issues before
+// they get here, and the Tasks DB carries no Backlog option on purpose.
 const STATUS_BY_STATE_TYPE = {
   triage: "🔴 To Do",
-  backlog: "🧊 Backlog",
   unstarted: "🔴 To Do",
   started: "🔵 Doing",
   completed: "🟢 Done",
