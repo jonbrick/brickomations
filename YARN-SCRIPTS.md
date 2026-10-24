@@ -102,8 +102,11 @@ cd ~/projects/brickomations && yarn push --auto
                             # no prompts
 
 cd ~/projects/brickomations && yarn vault-sync
-                            # Notion → Obsidian vault mirrors (personal/).
-                            # no prompts
+                            # Notion → markdown mirrors: retros/goals/themes
+                            # into the vault's personal/; personal projects
+                            # (frontmatter + page body) into
+                            # brickography/projects/<todo|doing|done>/.
+                            # Read-only copies — edit in Notion. no prompts
 ```
 
 ## Bundles — session inputs for skills
@@ -172,4 +175,6 @@ collected.json              # raw sources
 journal.json                # 5MJ
 linearTeam.json             # design-team Linear view (roster issues, my
                             # comments, project updates — week-numbered)
+../projects/                # personal project mirrors (Notion → markdown,
+                            # read-only; written by vault-sync)
 ```
