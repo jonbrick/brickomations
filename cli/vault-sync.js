@@ -2,7 +2,10 @@
 
 /**
  * Vault Sync CLI
- * Syncs personal planning data from data/*.json to Obsidian vault as markdown.
+ * Syncs personal planning data from data/*.json to markdown mirrors:
+ *   retros / goals / themes → the Brickocampus vault's personal/
+ *   personal projects       → <brickography>/projects/<todo|doing|done>/
+ * (brickography root = the folder the data/ symlink points into).
  * Zero AI tokens — pure JS transformation with hash-based diff detection.
  *
  * Usage:
@@ -29,6 +32,22 @@ const VAULT_DIR = path.join(
 );
 const { readFileSyncRetry, writeFileSyncRetry } = require("../src/utils/fs-retry");
 const DATA_DIR = path.join(__dirname, "..", "data");
+const {
+  bucketFor,
+  isPersonal,
+  fileNameFor,
+  shortId,
+  renderProject,
+} = require("../src/utils/personal-projects-mirror");
+
+/**
+ * Brickography root: the folder the data/ symlink resolves into. Derived, not
+ * configured, so when brickography moves (and the symlink is re-pointed) the
+ * project mirror follows with zero edits here.
+ */
+function brickographyRoot() {
+  return path.dirname(fs.realpathSync(DATA_DIR));
+}
 
 // --- Helpers ---
 
@@ -400,153 +419,129 @@ function syncThemes(themes, goals) {
 }
 
 function syncPersonalProjects(projects, goals, { dryRun = false } = {}) {
-  const dir = path.join(VAULT_DIR, "projects");
-  if (!fs.existsSync(dir)) {
-    return { written: 0, skipped: 0, warnings: [], errors: [] };
-  }
+  const results = { written: 0, skipped: 0, moved: 0, warnings: [], errors: [], dir: "" };
 
-  const goalLookup = {};
+  let root;
+  try {
+    root = brickographyRoot();
+  } catch (err) {
+    results.errors.push(`cannot resolve brickography root from data/: ${err.message}`);
+    return results;
+  }
+  const dir = path.join(root, "projects");
+  results.dir = dir.replace(process.env.HOME, "~");
+  ensureDir(dir);
+
+  const goalTitles = {};
   for (const goal of goals) {
-    goalLookup[normalizeNotionId(goal._notionId)] = slugify(titleOf(goal));
+    goalTitles[normalizeNotionId(goal._notionId)] = titleOf(goal);
   }
 
-  const projectLookup = {};
-  for (const p of projects) {
-    projectLookup[normalizeNotionId(p._notionId)] = p;
+  const personal = projects.filter(isPersonal);
+  if (personal.length && !personal.some((p) => typeof p._content === "string")) {
+    results.warnings.push(
+      "life.json carries no page bodies for personal projects yet — files get frontmatter only until the next `yarn pull`"
+    );
   }
 
-  const results = { written: 0, skipped: 0, warnings: [], errors: [] };
-  const matchedNotionIds = new Set();
-
-  // Recursively find .md files under personal/projects/<Project Name>/<slug>.md.
-  // Skip "_"-prefixed staging/system folders (e.g. _personal-project-inbox) —
-  // pre-Notion staging, flat layout. Matches the skip convention in
-  // scripts/migrate-projects-to-folders.js, so renaming the staging folder can't
-  // reintroduce a gap where staging briefs get synced as real projects.
-  const files = [];
-  const walk = (subdir) => {
-    for (const entry of fs.readdirSync(subdir, { withFileTypes: true })) {
-      if (entry.name.startsWith(".") || entry.name.startsWith("_")) continue;
-      const full = path.join(subdir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (entry.isFile() && entry.name.endsWith(".md")) files.push(full);
+  // Index files already under projects/<bucket>/ by their notion_id so a
+  // Notion rename or Status change becomes a move, not a duplicate.
+  const existing = {};
+  let unmanaged = 0;
+  for (const bucket of ["todo", "doing", "done"]) {
+    const bucketDir = path.join(dir, bucket);
+    if (!fs.existsSync(bucketDir)) continue;
+    for (const name of fs.readdirSync(bucketDir)) {
+      if (!name.endsWith(".md") || name.startsWith(".")) continue;
+      const full = path.join(bucketDir, name);
+      let content;
+      try {
+        content = readFileSyncRetry(full, "utf8");
+      } catch (err) {
+        results.errors.push(`${bucket}/${name}: ${err.message}`);
+        continue;
+      }
+      const m = content.match(/^notion_id:\s*"([^"]+)"/m);
+      if (!m) {
+        unmanaged++;
+        continue;
+      }
+      existing[normalizeNotionId(m[1])] = full;
     }
-  };
-  walk(dir);
+  }
 
-  for (const filePath of files) {
-    const file = path.basename(filePath);
-    let content;
-    try {
-      content = readFileSyncRetry(filePath, "utf8");
-    } catch (err) {
-      results.errors.push(`${file}: ${err.message}`);
+  const usedPaths = new Set();
+  const ordered = [...personal].sort((a, b) =>
+    `${a.Project || ""}${a._notionId}`.localeCompare(`${b.Project || ""}${b._notionId}`)
+  );
+
+  for (const record of ordered) {
+    const id = normalizeNotionId(record._notionId);
+    const title = record.Project || "";
+    const bucket = bucketFor(record.Status);
+    if (!bucket) {
+      results.warnings.push(`"${title}": Status "${record.Status}" has no bucket — skipped`);
       continue;
     }
 
-    const parsed = parseFrontmatter(content);
-    if (!parsed.hasFM) {
-      results.warnings.push(`${file}: no frontmatter — skipped`);
-      continue;
+    let name = fileNameFor(title, record._notionId);
+    if (usedPaths.has(`${bucket}/${name}`.toLowerCase())) {
+      name = fileNameFor(`${title} (${shortId(record._notionId)})`, record._notionId);
+      results.warnings.push(`"${title}": duplicate title in ${bucket}/ — written as ${name}`);
     }
+    usedPaths.add(`${bucket}/${name}`.toLowerCase());
 
-    const notionUrl = parsed.frontmatter.notion_url;
-    if (!notionUrl) {
-      results.warnings.push(`${file}: no notion_url — skipped`);
-      continue;
+    const target = path.join(dir, bucket, name);
+    const current = existing[id];
+    delete existing[id];
+
+    if (current && path.resolve(current) !== path.resolve(target)) {
+      const from = path.relative(dir, current);
+      const to = path.relative(dir, target);
+      if (dryRun) {
+        console.log(`  would move: ${from} → ${to}`);
+      } else {
+        try {
+          ensureDir(path.dirname(target));
+          fs.renameSync(current, target);
+        } catch (err) {
+          results.errors.push(`${from} → ${to}: ${err.message}`);
+          continue;
+        }
+      }
+      results.moved++;
     }
-
-    const id = extractNotionIdFromUrl(notionUrl);
-    if (!id) {
-      results.warnings.push(`${file}: notion_url has no 32-char id — skipped`);
-      continue;
-    }
-
-    const record = projectLookup[id];
-    if (!record) {
-      results.warnings.push(
-        `${file}: notion_url has no matching record (deleted in Notion?) — skipped`
-      );
-      continue;
-    }
-
-    matchedNotionIds.add(id);
-
-    // Build desired frontmatter values (fully-formed YAML strings)
-    const desired = {};
-    desired.status = `"${stripEmoji(record.Status || "")}"`;
-    desired.start_date = record.Date || "";
-    desired.end_date = record["Date End"] || record.Date || "";
-    desired.priority = (record.Priority || "").toLowerCase();
-    desired.description = record.Description
-      ? `"${yamlEscape(record.Description)}"`
-      : '""';
-    desired.lead = record.Lead
-      ? `"[[${yamlEscape(record.Lead)}]]"`
-      : '""';
 
     const goalIds = record["🏆 Goal"] || [];
-    const goalLinks = goalIds
-      .map((id) => goalLookup[normalizeNotionId(id)])
-      .filter(Boolean)
-      .map((s) => `"[[${s}]]"`);
-    desired.goal = `[${goalLinks.join(", ")}]`;
-
-    // notion_name: only if Notion title diverges from filename slug
-    const fileSlug = file.replace(/\.md$/, "");
-    const notionTitleSlug = slugify(record.Project || "");
-    if (notionTitleSlug && notionTitleSlug !== fileSlug) {
-      desired.notion_name = `"${yamlEscape(record.Project)}"`;
-    }
-
-    // Diff: compare unquoted values
-    const unquote = (s) => {
-      if (s === undefined || s === null) return "";
-      const m = String(s).match(/^"(.*)"$/);
-      return m ? m[1] : String(s);
-    };
-
-    const updates = {};
-    for (const [key, valQuoted] of Object.entries(desired)) {
-      const currentUnq = unquote(parsed.frontmatter[key]);
-      const desiredUnq = unquote(valQuoted);
-      if (currentUnq !== desiredUnq) {
-        updates[key] = valQuoted;
-      }
-    }
-
-    if (Object.keys(updates).length === 0) {
-      results.skipped++;
-      continue;
-    }
+    const titles = goalIds.map((g) => goalTitles[normalizeNotionId(g)]).filter(Boolean);
+    const markdown = renderProject(record, titles);
 
     if (dryRun) {
-      const relPath = path.relative(VAULT_DIR, filePath);
-      console.log(`  would update: ${relPath}`);
-      for (const [key, valQuoted] of Object.entries(updates)) {
-        const current = parsed.frontmatter[key];
-        console.log(`    ${key}: ${JSON.stringify(current)} → ${valQuoted}`);
+      if (readSyncHash(target) === computeSyncHash(markdown)) {
+        results.skipped++;
+      } else {
+        console.log(`  would write: ${bucket}/${name}`);
+        results.written++;
       }
-      results.written++;
       continue;
     }
 
     try {
-      const newContent = serializeFrontmatter(parsed, updates);
-      writeFileSyncRetry(filePath, newContent);
-      results.written++;
+      ensureDir(path.dirname(target));
+      if (writeIfChanged(target, markdown)) results.written++;
+      else results.skipped++;
     } catch (err) {
-      results.errors.push(`${file}: ${err.message}`);
+      results.errors.push(`${bucket}/${name}: ${err.message}`);
     }
   }
 
-  // Notion records that have no matching vault file
-  for (const [id, record] of Object.entries(projectLookup)) {
-    if (!matchedNotionIds.has(id)) {
-      results.warnings.push(
-        `Notion project "${record.Project}" has no vault file (auto-create not implemented v1)`
-      );
-    }
+  for (const full of Object.values(existing)) {
+    results.warnings.push(
+      `${path.relative(dir, full)}: no matching personal project in Notion — left in place (\`--prune\` removes it)`
+    );
+  }
+  if (unmanaged) {
+    results.warnings.push(`${unmanaged} file(s) under projects/ have no notion_id — ignored`);
   }
 
   return results;
@@ -616,6 +611,37 @@ function pruneOrphans({ retroData, lifeData, dryRun }) {
     }
   }
 
+  // Personal-project mirrors live outside the vault; prune by notion_id too.
+  const personalIds = new Set(
+    (lifeData?.personalProjects || []).filter(isPersonal).map((p) => normalizeNotionId(p._notionId))
+  );
+  let projectsDir = null;
+  try {
+    projectsDir = path.join(brickographyRoot(), "projects");
+  } catch {
+    projectsDir = null;
+  }
+  if (projectsDir && fs.existsSync(projectsDir)) {
+    for (const bucket of ["todo", "doing", "done"]) {
+      const bucketDir = path.join(projectsDir, bucket);
+      if (!fs.existsSync(bucketDir)) continue;
+      for (const file of fs.readdirSync(bucketDir).filter((f) => f.endsWith(".md"))) {
+        const fullPath = path.join(bucketDir, file);
+        const match = readFileSyncRetry(fullPath, "utf8").match(/^notion_id:\s*"([^"]+)"/m);
+        if (!match) {
+          results.unmanaged++;
+          continue;
+        }
+        if (!personalIds.has(normalizeNotionId(match[1]))) {
+          results.pruned.push({ type: `projects/${bucket}`, file, notionId: match[1], reason: "deleted" });
+          if (!dryRun) fs.unlinkSync(fullPath);
+        } else {
+          results.kept++;
+        }
+      }
+    }
+  }
+
   return results;
 }
 
@@ -677,7 +703,7 @@ async function main() {
     allResults.push({ name: "Personal Projects", ...r });
     const verb = DRY_RUN ? "would update" : "written";
     console.log(
-      `Personal Projects: ${r.written} ${verb}, ${r.skipped} unchanged` +
+      `Personal Projects → ${r.dir || "?"}: ${r.written} ${verb}, ${r.skipped} unchanged, ${r.moved} moved` +
         (r.warnings.length ? `, ${r.warnings.length} warnings` : "") +
         (r.errors.length ? `, ${r.errors.length} errors` : "")
     );

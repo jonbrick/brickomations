@@ -369,6 +369,58 @@ async function pullLifeData(spinner) {
     spinner.stop(`  ✓ Task content: ${fetched} fetched, ${skipped} unchanged, ${withContent} with content`);
   }
 
+  // Fetch page bodies for personal projects (same delta rule as tasks) so
+  // vault-sync can mirror the whole brief — properties + body — to
+  // brickography without a Notion call of its own. Work rows are skipped:
+  // their bodies belong to the Linear → Notion sync.
+  if (Array.isArray(life.personalProjects) && life.personalProjects.length > 0) {
+    const previousProjects = {};
+    if (Array.isArray(existingLife?.personalProjects)) {
+      for (const p of existingLife.personalProjects) {
+        if (p._notionId) previousProjects[p._notionId] = p;
+      }
+    }
+    const emptyHash = crypto.createHash("md5").update("").digest("hex");
+
+    spinner.start();
+    let fetched = 0;
+    let skipped = 0;
+    for (const project of life.personalProjects) {
+      if ((project.Category || "") !== "🌱 Personal") continue;
+      const prev = previousProjects[project._notionId];
+
+      if (
+        prev &&
+        prev._notionEditedTime &&
+        project._notionEditedTime === prev._notionEditedTime &&
+        typeof prev._content === "string"
+      ) {
+        project._content = prev._content;
+        project._contentHash = prev._contentHash || emptyHash;
+        project._hash = computeHash(project);
+        skipped++;
+        continue;
+      }
+
+      try {
+        const blocks = await db.getPageBlocks(project._notionId);
+        project._content = blocksToMarkdown(blocks) || "";
+        project._contentHash = crypto.createHash("md5").update(project._content).digest("hex");
+        project._hash = computeHash(project);
+        fetched++;
+        await delay(config.sources.rateLimits.notion.backoffMs);
+      } catch (error) {
+        project._content = prev?._content || "";
+        project._contentHash = prev?._contentHash || emptyHash;
+        project._hash = computeHash(project);
+        if (process.env.DEBUG) {
+          console.error(`  ⚠ Failed to fetch body for project ${project._notionId}: ${error.message}`);
+        }
+      }
+    }
+    spinner.stop(`  ✓ Personal project bodies: ${fetched} fetched, ${skipped} unchanged`);
+  }
+
   ensureDir(DATA_DIR);
   writeFileSyncRetry(
     path.join(DATA_DIR, "life.json"),
