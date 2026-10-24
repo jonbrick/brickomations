@@ -87,7 +87,9 @@ cd ~/projects/brickomations && yarn pull:linear
                             # Linear → Notion (assigned issues → 2026
                             # Tasks, assigned projects → 2026 Projects)
                             # AND → local data/linearTeam.json (design-team
-                            # roster issues + my recent comments).
+                            # roster issues, my recent comments, project-
+                            # update posts on the configured teams'
+                            # projects — 90 days, every author).
                             # --dry-run previews; --tasks-only is the
                             # issues-only leg behind linear:week /
                             # linear:range; --days= / --from= --to= set
@@ -168,6 +170,6 @@ summaries.json              # week + month rollups
 calendar.json               # habit calendars
 collected.json              # raw sources
 journal.json                # 5MJ
-linearTeam.json             # design-team Linear view (roster issues +
-                            # my comments, week-numbered)
+linearTeam.json             # design-team Linear view (roster issues, my
+                            # comments, project updates — week-numbered)
 ```

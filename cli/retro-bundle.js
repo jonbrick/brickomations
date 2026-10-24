@@ -86,6 +86,7 @@ function main() {
   const life = loadJson("life.json");
   const journal = loadJson("journal.json");
   const collected = loadJson("collected.json");
+  const linearTeam = loadJson("linearTeam.json");
 
   // plan.json week titles are zero-padded ("Week 08")
   const weekTitle = `Week ${String(wk).padStart(2, "0")}`;
@@ -144,6 +145,15 @@ function main() {
     start,
     end
   );
+  // Linear project-update posts dated inside the week (pull-linear's local
+  // team cache; every author, `Mine` flags Jon's own). null = the cache
+  // predates the key — rerun yarn pull:linear on the mini; [] = a week
+  // with no posts.
+  const projectUpdates = Array.isArray(linearTeam.projectUpdates)
+    ? linearTeam.projectUpdates
+        .filter((u) => inRange(u.Date, start, end))
+        .sort((a, b) => a["Created At"].localeCompare(b["Created At"]))
+    : null;
 
   const bundle = {
     week: {
@@ -170,6 +180,7 @@ function main() {
     habitsPlan,
     workPlan,
     tasks,
+    projectUpdates,
     journal: journalEntries,
     medications,
     supplements,

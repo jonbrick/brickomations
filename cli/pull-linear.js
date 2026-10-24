@@ -11,7 +11,9 @@
  * Also writes ONE local JSON, data/linearTeam.json — the design-team
  * view Notion deliberately doesn't carry: issues assigned to the
  * LINEAR_DESIGN_TEAM_EMAILS roster (any team, delegation visible via
- * Creator) plus the viewer's recent issue comments. Local-only, never
+ * Creator), the viewer's recent issue comments, and the project-update
+ * posts on the LINEAR_PROJECT_TEAM_KEYS teams' projects (every author,
+ * full body — retro and founder-update context). Local-only, never
  * synced to Notion; retro/audit sessions query it directly. All other
  * local work state still derives from Notion via `yarn pull` (both DBs
  * land in data/life.json), same as every other source.
@@ -31,8 +33,9 @@
  * heartbeat ping.
  *
  * --tasks-only runs just the assigned-issues → Notion 2026 Tasks leg: no
- * projects sync, no team-roster/comments fetch, no data/linearTeam.json
- * write (iCloud-safe from the MacBook), and no heartbeat ping — the
+ * projects sync, no team-roster/comments/project-updates fetch, no
+ * data/linearTeam.json write (iCloud-safe from the MacBook), and no
+ * heartbeat ping — the
  * pull-linear heartbeat attests the full scheduled job, and a partial
  * manual run must not vouch for legs it skipped. Behind yarn linear:week
  * (--days=8) and yarn linear:range (append --from=/--to=).
@@ -76,6 +79,10 @@ const COMPLETED_WINDOW_DAYS = 21;
 // wide enough that a weekly retro run any time the following week still
 // sees the full prior week, with room for a lapsed week or two.
 const COMMENT_WINDOW_DAYS = 35;
+// Rolling window for project-update posts — wide enough for a monthly
+// recap run well into the following month. Low volume (a few posts per
+// project per month), so the width costs nothing.
+const PROJECT_UPDATE_WINDOW_DAYS = 90;
 const TEAM_CACHE_FILE = path.join(DATA_DIR, "linearTeam.json");
 // Bounded runtime: the per-job wakelock lasts as long as the process, so a
 // hung API call must not hold the mini awake. A handful of GraphQL pages
@@ -273,6 +280,34 @@ function toCommentRecord(node, weeks) {
   };
 }
 
+/**
+ * Team-cache project-update record: one Linear "Project update" post.
+ * Full body kept — unlike comments, the post IS the context (what shipped,
+ * what slipped, the health call) and volume is low. Week Number derives
+ * from the NY-local post date, the same axis as comments. Mine marks the
+ * viewer's own posts so consumers can filter without knowing the email.
+ */
+function toProjectUpdateRecord(node, weeks, viewerEmail) {
+  const day = nyDate(node.createdAt);
+  const authorEmail = node.user ? node.user.email : "";
+  return {
+    Project: node.project.name,
+    "Project URL": node.project.url,
+    Teams: (node.project.teams?.nodes || []).map((t) => t.key),
+    Author: node.user ? node.user.name : "",
+    "Author Email": authorEmail,
+    Mine: Boolean(viewerEmail) && authorEmail === viewerEmail,
+    // Linear health call on the post: onTrack / atRisk / offTrack
+    Health: node.health || "",
+    Date: day,
+    "Week Number": weekNumberFor(day, weeks),
+    Body: node.body || "",
+    URL: node.url,
+    "Created At": node.createdAt || "",
+    "Edited At": node.editedAt || "",
+  };
+}
+
 // --- Main ---
 
 async function main() {
@@ -338,12 +373,14 @@ async function main() {
       .sort((a, b) => a.Name.localeCompare(b.Name));
   }
 
-  // Local team cache: roster-assigned issues + the viewer's recent issue
-  // comments. Fetched before any Notion write so a cache failure fails the
-  // whole run loudly rather than leaving a fresh Notion / stale cache split.
+  // Local team cache: roster-assigned issues, the viewer's recent issue
+  // comments, and project-update posts on the configured teams' projects.
+  // Fetched before any Notion write so a cache failure fails the whole run
+  // loudly rather than leaving a fresh Notion / stale cache split.
   // Skipped under --tasks-only.
   let teamIssues = [];
   let myComments = [];
+  let projectUpdates = [];
   let teamCache = null;
   if (!TASKS_ONLY) {
     const rosterNodes = await linear.getIssuesAssignedToEmails(
@@ -365,6 +402,25 @@ async function main() {
       `  ✓ ${commentNodes.length} of my issue comments (last ${COMMENT_WINDOW_DAYS} days)`
     );
 
+    // Project updates are team-scoped, not assignment-scoped: a roster
+    // member's project the viewer isn't on still matters for the team
+    // read, and other leads' posts on shared projects are the context a
+    // founder update must not duplicate.
+    const updateCutoff = new Date(
+      Date.now() - PROJECT_UPDATE_WINDOW_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString();
+    const updateNodes = (
+      await linear.getProjectUpdates(teamKeys, updateCutoff)
+    ).filter((node) => node.project);
+    projectUpdates = updateNodes
+      .map((node) => toProjectUpdateRecord(node, weeks, viewer.email))
+      .sort((a, b) => b["Created At"].localeCompare(a["Created At"]));
+    const mineCount = projectUpdates.filter((u) => u.Mine).length;
+    console.log(
+      `  ✓ ${projectUpdates.length} project updates on ${teamKeys.join("/")} ` +
+        `projects (${mineCount} mine, last ${PROJECT_UPDATE_WINDOW_DAYS} days)`
+    );
+
     teamIssues = rosterNodes
       .map((node) => toTeamIssueRecord(node, weeks))
       .sort(
@@ -381,9 +437,12 @@ async function main() {
         roster: rosterEmails,
         settledWindow: { from: settledWindow.from, to: settledWindow.to },
         commentWindowDays: COMMENT_WINDOW_DAYS,
+        projectUpdateWindowDays: PROJECT_UPDATE_WINDOW_DAYS,
+        projectTeamKeys: teamKeys,
       },
       teamIssues,
       myComments,
+      projectUpdates,
     };
   }
 
@@ -414,7 +473,8 @@ async function main() {
       for (const action of projectSync.actions) console.log(`  ${action}`);
       console.log(
         `\n[dry-run] team cache plan: ${teamIssues.length} issues, ` +
-          `${myComments.length} comments → ${TEAM_CACHE_FILE}`
+          `${myComments.length} comments, ${projectUpdates.length} project ` +
+          `updates → ${TEAM_CACHE_FILE}`
       );
     }
     console.log("\n[dry-run] nothing written (no Notion, no local JSON, no heartbeat)");
@@ -425,7 +485,7 @@ async function main() {
     fs.writeFileSync(TEAM_CACHE_FILE, JSON.stringify(teamCache, null, 2));
     console.log(
       `✅ data/linearTeam.json written (${teamIssues.length} team issues, ` +
-        `${myComments.length} of my comments)`
+        `${myComments.length} of my comments, ${projectUpdates.length} project updates)`
     );
   }
 
@@ -455,7 +515,7 @@ async function main() {
     `notion tasks +${sync.created}/~${sync.updated}/gone ${sync.gone}, ` +
       `notion projects +${projectSync.created}/~${projectSync.updated}/gone ` +
       `${projectSync.gone}, team cache ${teamIssues.length} issues/` +
-      `${myComments.length} comments`
+      `${myComments.length} comments/${projectUpdates.length} project updates`
   );
 }
 
