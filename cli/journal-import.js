@@ -7,19 +7,19 @@
  * Inbox model (in iCloud Drive at ~/Documents/brickography/, synced across machines):
  *   - Drop an unzipped 5MJ export into _journal-inbox/  (a dir containing index.json)
  *   - Run: yarn journal:import
- *   - The script reads the text into data/journal.json, copies the tiny index.json
- *     to journal-archive/<export-id>.json (the permanent record), and moves the
- *     bulky export out of the inbox to the Trash.
+ *   - The script reads the text into data/journal.json and moves the bulky
+ *     export out of the inbox to the Trash. data/journal.json is the record;
+ *     the 5MJ app still holds the originals.
  *   - An empty inbox is a no-op: data/journal.json already holds every entry.
  *
- * _journal-inbox/ and journal-archive/ are symlinks to ~/Documents/brickography/
- * (iCloud Drive, outside the vault), the same mechanism data/ uses — so
- * brickomations stays scripts-only and the journal data (Jon's manual exports) lives
- * beside the data cache.
+ * _journal-inbox/ is a symlink to ~/Documents/brickography/ (iCloud Drive,
+ * outside the vault), the same mechanism data/ uses — so brickomations stays
+ * scripts-only and the journal data (Jon's manual exports) lives beside the
+ * data cache.
  *
  * Usage: yarn journal:import [path-to-export-dir-or-json]
- *   - No arg: scan _journal-inbox/ (normal path; archives + clears the inbox)
- *   - Explicit path: ad-hoc import only (no archiving, no inbox changes)
+ *   - No arg: scan _journal-inbox/ (normal path; clears the inbox)
+ *   - Explicit path: ad-hoc import only (no inbox changes)
  * Output: data/journal.json (2026 entries only)
  */
 
@@ -29,7 +29,6 @@ const os = require("os");
 
 const DATA_DIR = path.join(__dirname, "..", "data");
 const INBOX_DIR = path.join(__dirname, "..", "_journal-inbox");
-const ARCHIVE_DIR = path.join(__dirname, "..", "journal-archive");
 
 function ensureDir(d) {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
@@ -212,7 +211,7 @@ function importAndWrite(inputPaths) {
 // --- Main ---
 
 function main() {
-  // Explicit path: ad-hoc import only — no archiving, no inbox changes.
+  // Explicit path: ad-hoc import only — no inbox changes.
   if (process.argv[2]) {
     let inputPath = process.argv[2];
     if (fs.existsSync(inputPath) && fs.statSync(inputPath).isDirectory()) {
@@ -226,7 +225,7 @@ function main() {
     return;
   }
 
-  // Inbox mode: import everything in _journal-inbox/, then archive + clear it.
+  // Inbox mode: import everything in _journal-inbox/, then clear it.
   const exports = findInboxExports();
   if (exports.length === 0) {
     console.log(
@@ -240,16 +239,12 @@ function main() {
   console.log(`Found ${exports.length} export(s) in _journal-inbox/`);
   importAndWrite(exports.map((e) => e.indexPath));
 
-  // Archive the tiny index.json, then move the bulky export out to Trash.
-  ensureDir(ARCHIVE_DIR);
+  // Move the bulky export out of the inbox to Trash (recoverable).
   for (const exp of exports) {
-    const archivePath = path.join(ARCHIVE_DIR, `${exp.name}.json`);
-    fs.copyFileSync(exp.indexPath, archivePath);
-    console.log(`📦 archived journal-archive/${exp.name}.json`);
     moveToTrash(exp.dir);
     console.log(`🗑️  cleared ${exp.name}/ from inbox → Trash`);
   }
-  console.log("\n✅ Inbox empty. Archive holds the index.json record.\n");
+  console.log("\n✅ Inbox empty. data/journal.json is the record.\n");
 }
 
 main();
