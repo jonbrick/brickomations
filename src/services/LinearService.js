@@ -291,6 +291,55 @@ class LinearService {
   }
 
   /**
+   * Project status updates (the "Project updates" posts) on projects owned
+   * by any of the given team keys, created after `cutoff` (ISO datetime).
+   * Every author comes along — the cache keeps the whole thread around a
+   * project; consumers filter to the viewer's own posts via the Mine flag.
+   */
+  async getProjectUpdates(teamKeys, cutoff) {
+    const nodes = [];
+    let after = null;
+
+    do {
+      const data = await this.graphql(
+        `query ProjectUpdates($filter: ProjectUpdateFilter!, $first: Int!, $after: String) {
+          projectUpdates(first: $first, after: $after, filter: $filter, orderBy: createdAt) {
+            nodes {
+              id
+              body
+              health
+              createdAt
+              editedAt
+              url
+              user { name email }
+              project {
+                id
+                name
+                url
+                teams(first: 10) { nodes { key } }
+              }
+            }
+            pageInfo { hasNextPage endCursor }
+          }
+        }`,
+        {
+          filter: {
+            project: { accessibleTeams: { some: { key: { in: teamKeys } } } },
+            createdAt: { gt: cutoff },
+          },
+          first: PAGE_SIZE,
+          after,
+        }
+      );
+      const page = data.projectUpdates;
+      nodes.push(...page.nodes);
+      after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+    } while (after);
+
+    return nodes;
+  }
+
+  /**
    * Issues assigned to the authenticated user, any team, every state.
    * Completed and canceled issues only within the settled window
    * (`{ from, to }` ISO datetimes) — others fall out of the pull. Canceled
