@@ -58,7 +58,8 @@ function strip(record) {
   return out;
 }
 
-// Like strip(), but keeps _notionId — /plan-week builds Notion URLs from it.
+// Like strip(), but keeps _notionId — /plan-week and /update-week write back
+// to these rows (re-dates, status, habit numbers) and build Notion URLs from it.
 function stripKeepId(record) {
   if (!record || typeof record !== "object") return record;
   const out = strip(record);
@@ -315,9 +316,9 @@ function buildBundle(wk) {
   });
   const tasks = { personal: [], work: [], other: [] };
   for (const t of weekTasks) {
-    if (t["WORK Category"]) tasks.work.push(strip(t));
-    else if (t["PERSONAL Category"]) tasks.personal.push(strip(t));
-    else tasks.other.push(strip(t));
+    if (t["WORK Category"]) tasks.work.push(stripKeepId(t));
+    else if (t["PERSONAL Category"]) tasks.personal.push(stripKeepId(t));
+    else tasks.other.push(stripKeepId(t));
   }
 
   // --- Calendar blocks, both sides (constraints are side-agnostic). Plan span.
@@ -400,8 +401,8 @@ function buildBundle(wk) {
       )
     : [];
   const priorOpenTasks = {
-    personal: priorOpen.filter((t) => t.Category !== "💼 Work").map(strip),
-    work: priorOpen.filter((t) => t.Category === "💼 Work").map(strip),
+    personal: priorOpen.filter((t) => t.Category !== "💼 Work").map(stripKeepId),
+    work: priorOpen.filter((t) => t.Category === "💼 Work").map(stripKeepId),
   };
 
   const bundle = {
