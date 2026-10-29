@@ -85,7 +85,8 @@ cd ~/projects/brickomations && yarn pull --auto
 
 cd ~/projects/brickomations && yarn pull:linear
                             # Linear → Notion (assigned issues → 2026
-                            # Tasks, assigned projects → 2026 Projects)
+                            # Tasks, assigned projects → 2026 Projects;
+                            # both scoped to the configured teams)
                             # AND → local data/linearTeam.json (design-team
                             # roster issues, my recent comments, project-
                             # update posts on the configured teams'
