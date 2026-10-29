@@ -24,8 +24,8 @@
 //   - Upsert on `Linear ID` — two consecutive runs produce identical state.
 //   - Status maps by Linear state *type* (never name — team state names
 //     vary), onto a fixed Linear-shaped option set. Backlog-state issues
-//     are filtered out upstream; their rows age into 🫥 Gone like any
-//     other absent ID.
+//     and issues on teams outside LINEAR_PROJECT_TEAM_KEYS are filtered
+//     out upstream; their rows age into 🫥 Gone like any other absent ID.
 //   - Rows whose Linear ID is absent from the pull (archived, unassigned)
 //     get Status 🫥 Gone — unless already settled (🟢 Done / 🛑 Canceled
 //     rows aging out of the pull window stay as they are). Rows are never

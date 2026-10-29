@@ -3,10 +3,11 @@
 /**
  * Pull Linear CLI
  *
- * The Linear → Notion collector: upserts assigned issues into the shared
- * 2026 Tasks DB and assigned projects (lead or member, any state, on the
- * LINEAR_PROJECT_TEAM_KEYS teams) into the shared 2026 Projects DB, so
- * Notion is the one holistic layer for phone-side retro/planning.
+ * The Linear → Notion collector: upserts assigned issues and assigned
+ * projects (lead or member, any state) — both scoped to the
+ * LINEAR_PROJECT_TEAM_KEYS teams — into the shared 2026 Tasks and 2026
+ * Projects DBs, so Notion is the one holistic layer for phone-side
+ * retro/planning.
  *
  * Also writes ONE local JSON, data/linearTeam.json — the design-team
  * view Notion deliberately doesn't carry: issues assigned to the
@@ -321,9 +322,9 @@ async function main() {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  if (!TASKS_ONLY && teamKeys.length === 0) {
+  if (teamKeys.length === 0) {
     throw new Error(
-      "LINEAR_PROJECT_TEAM_KEYS is required (comma-separated Linear team keys for the projects pull)"
+      "LINEAR_PROJECT_TEAM_KEYS is required (comma-separated Linear team keys scoping the tasks and projects pulls)"
     );
   }
 
@@ -348,11 +349,18 @@ async function main() {
   // dated work, and backlog is noise there (Jon, Thu 2026-10-22). Dropping
   // them here lets the sync's gone pass retire any rows they left behind;
   // an issue promoted out of backlog re-enters on the next run.
+  //
+  // Issues off the configured teams never reach Notion either: anything
+  // Jon owns on another team gets a twin ticket on a PD/DE board, and the
+  // twin is the tracked row (Jon, Thu 2026-10-29). Same gone-pass retire
+  // for rows the off-team originals left behind; settled rows stay put.
   const pulled = await linear.getAssignedIssues(settledWindow);
-  const issues = pulled.filter((node) => node.state.type !== "backlog");
+  const nonBacklog = pulled.filter((node) => node.state.type !== "backlog");
+  const issues = nonBacklog.filter((node) => teamKeys.includes(node.team?.key));
   console.log(
-    `  ✓ ${issues.length} assigned issues (${settledWindow.label}; ` +
-      `${pulled.length - issues.length} backlog skipped)`
+    `  ✓ ${issues.length} assigned ${teamKeys.join("/")} issues (${settledWindow.label}; ` +
+      `${pulled.length - nonBacklog.length} backlog skipped, ` +
+      `${nonBacklog.length - issues.length} off-team skipped)`
   );
 
   // The projects leg pulls by assignment (lead or member), all states,
