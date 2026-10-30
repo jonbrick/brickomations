@@ -13,6 +13,8 @@
 # Schedule (keep in sync with _automation/_automation-readme.md Schedule table):
 #   brickomations-daily-brief        — 5:50 AM
 #   pull-linear                 — 6:30 AM
+#   app-launcher                — 5:55 AM, 8:40 PM (ensure-apps-running.sh; failed ping
+#                                 when an app didn't open or Obsidian never loaded)
 #   yarn-sync                   — every 2 hr, 7 AM–11 PM (7, 9, 11 AM, 1, 3, 5, 7, 9, 11 PM)
 #   cowork-morning-brief        — 6 AM
 #   cowork-evening-processor    — 9:20 PM (after the 9:15 PM evening render)
@@ -125,6 +127,7 @@ check_job() {
   local job="$1"
   local schedule="$2"
   local grace_sec="$3"
+  local bootstrap="${4:-}"
 
   local most_recent
   most_recent=$(most_recent_expected_passed "$schedule" "$grace_sec")
@@ -140,6 +143,11 @@ check_job() {
   local ping_file="$HEARTBEAT_DIR/${job}.json"
 
   if [ ! -f "$ping_file" ]; then
+    # A job added after the watchdog went live has no ping until its first
+    # scheduled run under the new code; "no ping" there is a false alarm.
+    if [ "$bootstrap" = "bootstrap" ]; then
+      return
+    fi
     local key="missed-${most_recent}"
     alert "$job" "no ping (expected by $(date -r "$most_recent" +%H:%M:%S))" "$key"
     return
@@ -245,6 +253,28 @@ granola_field() {
   printf '%s\n' "$2" | sed -n "s/^$1=//p"
 }
 
+# Three states, not two. `pgrep -x Obsidian` alone lied on Thu 2026-10-29:
+# the launcher's `open -a` spawned the main process at 20:55, Gatekeeper put
+# a first-open prompt for the (quarantined, Chrome-downloaded) bundle on the
+# headless mini's screen, and the process sat there 18 h without ever loading
+# the app or its plugins — "Obsidian running" rode along on both alerts. An
+# Electron app has an "<App> Helper (Renderer)" process only once it has
+# actually initialized, so that's the liveness signal; a bare main process
+# means a blocked launch.
+obsidian_status() {
+  if pgrep -fq 'Obsidian Helper \(Renderer\)'; then
+    echo "Obsidian running"
+  elif pgrep -xq Obsidian; then
+    local pid since
+    pid=$(pgrep -xo Obsidian)
+    since=$(ps -o lstart= -p "$pid" 2>/dev/null | sed 's/ *$//')
+    since=$(date -j -f '%a %b %d %T %Y' "$since" '+%a %H:%M' 2>/dev/null || echo "?")
+    echo "Obsidian process up since $since but the app never loaded — likely a dialog on the mini's screen"
+  else
+    echo "Obsidian NOT running"
+  fi
+}
+
 check_granola_sync() {
   local job="granola-sync"
   local now_hm
@@ -271,8 +301,8 @@ check_granola_sync() {
     return
   fi
 
-  local obsidian_state="Obsidian running"
-  pgrep -xq Obsidian || obsidian_state="Obsidian NOT running"
+  local obsidian_state
+  obsidian_state=$(obsidian_status)
 
   # 1. Liveness.
   local log_file log_epoch
@@ -327,6 +357,11 @@ check_job "yarn-sync" \
 check_job "cowork-morning-brief" "06:00" 1800
 
 check_job "cowork-evening-processor" "21:20" 1800
+
+# ensure-apps-running.sh: ok once both apps opened and Obsidian has a renderer,
+# failed otherwise (it waits ≤90 s). "bootstrap": no ping file until its first
+# run under this code, so a missing file isn't a miss.
+check_job "app-launcher" "05:55 20:40" 300 bootstrap
 
 check_granola_sync
 

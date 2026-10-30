@@ -13,7 +13,11 @@
     <!-- Fires before each Cowork event so Claude Desktop is up. `open -a` is -->
     <!-- idempotent so we can safely fire both apps each time.                -->
     <!--  5:55 AM — before 6 AM Cowork morning-brief                          -->
-    <!--  8:55 PM — before 9 PM Cowork evening-processor                      -->
+    <!--  8:40 PM — before the 9:20 PM Cowork evening-processor. Granola Sync -->
+    <!--  runs its first cycle 30 min after Obsidian loads, so a relaunch     -->
+    <!--  here syncs by ~9:10 PM, ahead of the 9:15 render and 9:20 processor -->
+    <!--  (was 8:55 PM — a relaunch then synced at 9:25, after the processor; -->
+    <!--  Mon 2026-10-26 and Thu 2026-10-29).                                 -->
     <key>StartCalendarInterval</key>
     <array>
         <dict>
@@ -26,7 +30,7 @@
             <key>Hour</key>
             <integer>20</integer>
             <key>Minute</key>
-            <integer>55</integer>
+            <integer>40</integer>
         </dict>
     </array>
 
