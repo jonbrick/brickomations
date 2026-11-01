@@ -6,20 +6,27 @@
  * (it auths as jon.brick@cortex.io). Brickomations carries PERSONAL_GOOGLE_REFRESH_TOKEN
  * and reaches the personal side via GoogleCalendarService("personal").
  *
- * JSON shape (array of events):
+ * JSON shape (array of entries):
  *   [
  *     {
  *       "summary":     "Event title",                      // required
- *       "start":       "2026-06-16T18:00:00-04:00",        // required (ISO with TZ)
+ *       "start":       "2026-06-16T18:00:00-04:00",        // required (ISO with TZ; date-only = all-day)
  *       "end":         "2026-06-16T20:00:00-04:00",        // required
- *       "calendar":    "jonbrick09@gmail.com",             // required (cal ID or email)
+ *       "calendar":    "jonbrick09@gmail.com",             // required (cal ID, email, or alias "sober" / "drinking")
  *       "description": "...",                              // optional
- *       "location":    "..."                               // optional
+ *       "location":    "...",                              // optional
+ *       "action":      "create"                            // optional: "create" (default) | "delete"
  *     }
  *   ]
  *
- * Idempotent: skips creation if an event with the same calendar/start/end
- * (±60 sec window) already exists.
+ * Aliases: "sober" / "drinking" resolve to SOBER_CALENDAR_ID / DRINKING_CALENDAR_ID
+ * from .env, so skill-written JSON never carries a calendar ID. A missing env
+ * var fails the whole run before any write.
+ *
+ * Idempotent both ways: a create is skipped when an event with the same
+ * calendar/start/end (±60 sec window) already exists; a delete matches the
+ * same way plus exact summary and is skipped when nothing matches. Deletes
+ * land in Google Calendar trash (recoverable ~30 days).
  *
  * Run on the mini (PERSONAL_GOOGLE_REFRESH_TOKEN must be set):
  *   cd ~/projects/brickomations && node scripts/push-personal-cal-events.js [path] [--dry-run]
@@ -56,7 +63,31 @@ if (!Array.isArray(events)) {
 
 const TIME_ZONE = "America/New_York";
 
-async function findEvent(svc, calendarId, start, end) {
+// `calendar` may be an alias for the two cals whose IDs live only in .env.
+const CALENDAR_ALIASES = {
+  sober: "SOBER_CALENDAR_ID",
+  drinking: "DRINKING_CALENDAR_ID",
+};
+
+function resolveCalendar(value) {
+  const envVar = CALENDAR_ALIASES[String(value).toLowerCase()];
+  if (!envVar) return value;
+  const id = process.env[envVar];
+  if (!id) throw new Error(`calendar alias "${value}" needs ${envVar} in .env`);
+  return id;
+}
+
+// Resolve every alias before any write — a bad alias fails the run, never half of it.
+try {
+  events = events.map((ev) =>
+    ev && ev.calendar ? { ...ev, calendar: resolveCalendar(ev.calendar) } : ev
+  );
+} catch (err) {
+  console.error(`❌ ${err.message}`);
+  process.exit(1);
+}
+
+async function findEvent(svc, calendarId, start, end, summary) {
   const startMs = new Date(start).getTime();
   const timeMin = new Date(startMs - 2 * 60 * 1000);
   const timeMax = new Date(new Date(end).getTime() + 2 * 60 * 1000);
@@ -66,7 +97,11 @@ async function findEvent(svc, calendarId, start, end) {
   return list.find((e) => {
     const eStart = new Date(e.start.dateTime || e.start.date).getTime();
     const eEnd = new Date(e.end.dateTime || e.end.date).getTime();
-    return Math.abs(eStart - targetStart) < 60_000 && Math.abs(eEnd - targetEnd) < 60_000;
+    const timeMatch =
+      Math.abs(eStart - targetStart) < 60_000 && Math.abs(eEnd - targetEnd) < 60_000;
+    if (!timeMatch) return false;
+    // Deletes also require the title, so a block sharing a slot is never the one removed.
+    return summary === undefined || (e.summary || "").trim() === summary.trim();
   });
 }
 
@@ -76,15 +111,34 @@ async function main() {
   const svc = new GoogleCalendarService("personal");
 
   let pushed = 0;
+  let deleted = 0;
   let skipped = 0;
   let invalid = 0;
 
   for (const ev of events) {
     const { summary, start, end, calendar: calId, description, location } = ev;
+    const action = String(ev.action || "create").toLowerCase();
 
-    if (!summary || !start || !end || !calId) {
-      console.error(`  ❌ skip — missing required field(s): ${JSON.stringify(ev)}`);
+    if (!summary || !start || !end || !calId || !["create", "delete"].includes(action)) {
+      console.error(`  ❌ skip — missing required field(s) or bad action: ${JSON.stringify(ev)}`);
       invalid++;
+      continue;
+    }
+
+    if (action === "delete") {
+      const target = await findEvent(svc, calId, start, end, summary);
+      if (!target) {
+        console.log(`  ⏭️  ${start.slice(0, 16)} ${summary} → ${calId} — nothing to delete`);
+        skipped++;
+        continue;
+      }
+      if (DRY_RUN) {
+        console.log(`  🔸 WOULD DELETE ${start.slice(0, 16)} ${summary} → ${calId} id=${target.id}`);
+      } else {
+        await svc.deleteEvent(calId, target.id);
+        console.log(`  🗑️  DELETED ${start.slice(0, 16)} ${summary} → ${calId} id=${target.id}`);
+      }
+      deleted++;
       continue;
     }
 
@@ -115,7 +169,7 @@ async function main() {
   }
 
   console.log(
-    `\n📊 ${pushed} ${DRY_RUN ? "would push" : "pushed"} · ${skipped} skipped (already exists) · ${invalid} invalid${DRY_RUN ? " — dry run, no writes" : ""}\n`
+    `\n📊 ${pushed} ${DRY_RUN ? "would push" : "pushed"} · ${deleted} ${DRY_RUN ? "would delete" : "deleted"} · ${skipped} skipped (exists / nothing to delete) · ${invalid} invalid${DRY_RUN ? " — dry run, no writes" : ""}\n`
   );
 }
 
