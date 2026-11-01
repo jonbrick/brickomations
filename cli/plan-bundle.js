@@ -59,7 +59,8 @@ function strip(record) {
 }
 
 // Like strip(), but keeps _notionId — /plan-week and /update-week write back
-// to these rows (re-dates, status, habit numbers) and build Notion URLs from it.
+// to these rows (task re-dates, status, habit numbers; rock edits / [DELETE]
+// renames on a re-run) and build Notion URLs from it.
 function stripKeepId(record) {
   if (!record || typeof record !== "object") return record;
   const out = strip(record);
@@ -428,10 +429,10 @@ function buildBundle(wk) {
       rocks: {
         personal: rocksForWeek
           .filter((r) => r.Category !== "💼 Work")
-          .map(strip),
+          .map(stripKeepId),
         work: rocksForWeek
           .filter((r) => r.Category === "💼 Work")
-          .map(strip),
+          .map(stripKeepId),
       },
       soberDrinking,
       plannedBlocks,
