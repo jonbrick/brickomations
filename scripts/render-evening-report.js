@@ -12,11 +12,23 @@
  *                                            (rescheduled, unscheduled, or deleted)
  *                        Replaces the old Done-only ### Completed Tasks (renamed in place).
  *
- *   ### Completed Events  Notion 2026 Events that occurred (unchanged behaviour).
+ *   ### Completed Events  Notion 2026 Events dated today whose Status isn't Won't Do
+ *                        / N/A. A calendar-day proxy, not a status check — Jon flips
+ *                        Status to Done later, so at 9:15 PM most are still Scheduled.
  *
  *   ### Calendar          What actually happened, straight from calendar.json:
  *                          **Work**            workCalendar timed blocks
  *                          **Everything else** personalCalendar + workout + cooking
+ *                          **Planned**         the day's `Planned:` blocks (personal
+ *                                              calendar), prefix kept — the morning's
+ *                                              plan markers, NOT actuals. A planned
+ *                                              workout is confirmed only by a workout-
+ *                                              calendar line under Everything else;
+ *                                              wake-ups, bed and meals aren't captured
+ *                                              here at all. Before 2026-11-01 these
+ *                                              rendered prefix-stripped inside
+ *                                              Everything else, and the Evening Summary
+ *                                              read "Planned: Workout" as a workout.
  *                        Times + titles (emoji-stripped). Video games & data-only
  *                        calendars (weight, BP, sleep, PRs) are excluded by design.
  *                        Inserted right after ### Completed Events on notes that
@@ -127,13 +139,23 @@ function isTimed(start) {
 function selfDeclined(e) {
   return (e.attendees || []).some((a) => a && a.self && a.response === "declined");
 }
+/** True for a `Planned:` block — a plan marker staged by /plan-week, not an actual. */
+function isPlanned(e) {
+  return /^\s*planned:/i.test(String((e && e.summary) || ""));
+}
 /** Display title: drop a leading "Planned:" plan-marker, then a leading emoji. */
 function cleanTitle(summary) {
   return stripEmoji(String(summary || "").replace(/^\s*planned:\s*/i, "")).trim();
 }
-/** "Do Not Schedule" / personal-day blocker markers — not real happenings. */
+/** Display title for a plan marker: normalized "Planned: " prefix kept, emoji dropped. */
+function plannedTitle(summary) {
+  return `Planned: ${cleanTitle(summary)}`;
+}
+/** "Do Not Schedule" / personal-day blocker markers — not real happenings.
+ *  Matches a DNS token anywhere ("🛑 DNS", "Taking a Day, DNS") and the long form. */
 function isBlockerNoise(e) {
-  return /^DNS\b/i.test(cleanTitle(e.summary));
+  const t = cleanTitle(e.summary);
+  return /\bDNS\b/i.test(t) || /\bdo not schedule\b/i.test(t);
 }
 
 // ---- task classification (morning plan vs evening actual) -----------------
@@ -233,6 +255,9 @@ function completedEventLines(plan, date) {
 function calBlockLine(e) {
   return `- ${hhmm(e.start)} — ${cleanTitle(e.summary)}`;
 }
+function plannedBlockLine(e) {
+  return `- ${hhmm(e.start)} — ${plannedTitle(e.summary)}`;
+}
 
 function buildCalendarBody(calendar, date) {
   const keep = (e) =>
@@ -243,8 +268,14 @@ function buildCalendarBody(calendar, date) {
     .filter((e) => keep(e) && !selfDeclined(e))
     .sort(byStart);
 
+  // Actuals only — a `Planned:` block is the morning's intent, rendered in its
+  // own group below so the Evening Summary can't read it as something that happened.
   const elseEvents = EVERYTHING_ELSE_CALS
-    .flatMap((c) => (calendar[c] || []).filter(keep))
+    .flatMap((c) => (calendar[c] || []).filter((e) => keep(e) && !isPlanned(e)))
+    .sort(byStart);
+
+  const planned = EVERYTHING_ELSE_CALS
+    .flatMap((c) => (calendar[c] || []).filter((e) => keep(e) && isPlanned(e)))
     .sort(byStart);
 
   const out = [];
@@ -252,6 +283,10 @@ function buildCalendarBody(calendar, date) {
   if (elseEvents.length) {
     if (out.length) out.push("");
     out.push("**Everything else**", ...elseEvents.map(calBlockLine));
+  }
+  if (planned.length) {
+    if (out.length) out.push("");
+    out.push("**Planned**", ...planned.map(plannedBlockLine));
   }
   return out.length ? out : ["_nothing on the calendar_"];
 }
