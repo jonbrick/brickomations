@@ -7,8 +7,8 @@
  *
  * Tracking model (2026-11): five checkboxes per day — AM Supps / PM Supps
  * (taken), AM Supps Skipped / PM Supps Skipped, No Supps — folded by the
- * Status formula into one string ("Taken", "Morning only", "⏭️ Skipped",
- * "Morning ✅ · evening pending", "Not logged", …). Status is the sync
+ * Status formula into one string ("✅ Taken", "Morning only", "⏭️ Skipped",
+ * "Morning ✅ · evening pending", "❌ Not logged", …). Status is the sync
  * contract: the transformer reads it through utils/day-status.js and never
  * re-derives the day from the boxes. The AM Skipped / PM Skipped
  * multi-selects still name the individual misses inside a taken batch.
