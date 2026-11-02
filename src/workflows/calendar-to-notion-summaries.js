@@ -213,10 +213,7 @@ async function aggregateCalendarDataForWeek(
               const activeWeekNumbers = [];
               for (const weekPageId of activeWeekPageIds) {
                 try {
-                  const weekPage =
-                    await relationshipsDb.client.pages.retrieve({
-                      page_id: weekPageId,
-                    });
+                  const weekPage = await relationshipsDb.getPage(weekPageId);
                   // Extract week number from title like "Week 05" -> 5
                   const weeksProps = config.notion.properties.weeks;
                   const titlePropName = config.notion.getPropertyName(weeksProps.week);

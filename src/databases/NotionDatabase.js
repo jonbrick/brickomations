@@ -4,6 +4,7 @@ const { Client } = require("@notionhq/client");
 const config = require("../config");
 const { formatDate, formatDateOnly } = require("../utils/date");
 const { delay } = require("../utils/async");
+const { withRetry } = require("../utils/retry");
 const { chunkRichText } = require("../utils/notion-content");
 const { pick } = require("../utils/property-lookup");
 
@@ -12,6 +13,19 @@ class NotionDatabase {
     this.client = new Client({
       auth: config.notion.getToken(),
     });
+  }
+
+  /**
+   * Reads go through here so a transient Notion 5xx / 429 / timeout gets
+   * another try (schedule: config.sources.retryConfig). Writes — create,
+   * update, delete, append — never do: a 502 after a create may have landed
+   * server-side, and a retry would duplicate it.
+   *
+   * @param {() => Promise<any>} fn
+   * @returns {Promise<any>}
+   */
+  _withRetry(fn) {
+    return withRetry(fn, this.retryOptions);
   }
 
   /**
@@ -36,7 +50,9 @@ class NotionDatabase {
         options.sorts = sorts;
       }
 
-      const response = await this.client.databases.query(options);
+      const response = await this._withRetry(() =>
+        this.client.databases.query(options)
+      );
       return response.results;
     } catch (error) {
       throw new Error(`Failed to query database: ${error.message}`);
@@ -71,7 +87,9 @@ class NotionDatabase {
           options.sorts = sorts;
         }
 
-        const response = await this.client.databases.query(options);
+        const response = await this._withRetry(() =>
+          this.client.databases.query(options)
+        );
         results = results.concat(response.results);
 
         hasMore = response.has_more;
@@ -161,9 +179,9 @@ class NotionDatabase {
    */
   async getPage(pageId) {
     try {
-      const response = await this.client.pages.retrieve({
-        page_id: pageId,
-      });
+      const response = await this._withRetry(() =>
+        this.client.pages.retrieve({ page_id: pageId })
+      );
 
       return response;
     } catch (error) {
@@ -256,10 +274,12 @@ class NotionDatabase {
       let startCursor = undefined;
 
       while (hasMore) {
-        const response = await this.client.blocks.children.list({
-          block_id: pageId,
-          start_cursor: startCursor,
-        });
+        const response = await this._withRetry(() =>
+          this.client.blocks.children.list({
+            block_id: pageId,
+            start_cursor: startCursor,
+          })
+        );
 
         blocks = blocks.concat(response.results);
         hasMore = response.has_more;
@@ -294,9 +314,9 @@ class NotionDatabase {
    */
   async replacePageContent(pageId, newBlocks) {
     // 1. List existing blocks
-    const existing = await this.client.blocks.children.list({
-      block_id: pageId,
-    });
+    const existing = await this._withRetry(() =>
+      this.client.blocks.children.list({ block_id: pageId })
+    );
 
     // 2. Delete each existing block
     let deleted = 0;
@@ -311,10 +331,12 @@ class NotionDatabase {
     let cursor = existing.next_cursor;
     while (hasMore) {
       await delay(config.sources.rateLimits.notion.backoffMs);
-      const more = await this.client.blocks.children.list({
-        block_id: pageId,
-        start_cursor: cursor,
-      });
+      const more = await this._withRetry(() =>
+        this.client.blocks.children.list({
+          block_id: pageId,
+          start_cursor: cursor,
+        })
+      );
       for (const block of more.results) {
         await delay(config.sources.rateLimits.notion.backoffMs);
         await this.client.blocks.delete({ block_id: block.id });
