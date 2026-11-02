@@ -2,6 +2,7 @@
 
 const config = require("../config");
 const { resolveCalendarId } = require("../utils/calendar-mapper");
+const { classifyDayStatus } = require("../utils/day-status");
 
 /**
  * Parse an "AM Medication List" formula string ("Gabapentin, Sertraline")
@@ -18,15 +19,22 @@ function parseMedList(value) {
 /**
  * Transform Notion medication record to Google Calendar event.
  *
- * Model: assume-the-routine, log-exceptions, per-day regimen. The day's
- * AM/PM Medication relations (read via the AM/PM Medication List formula
- * strings) hold what was actually taken — a skipped med is removed from the
- * day's relation. AM Meds / PM Meds say which batch was taken; `No Meds`
- * overrides everything.
+ * Model (2026-11): the day's `Status` formula is the contract. It folds the
+ * AM Meds / PM Meds / AM Meds Skipped / PM Meds Skipped / No Meds checkboxes
+ * into one string (see utils/day-status.js); only a resolved day — taken,
+ * morning only, evening only — becomes an event. A day with one batch still
+ * pending gets no event yet: this sync creates each day's event once and
+ * never rewrites it, so writing "(AM)" at breakfast would freeze the day
+ * there. Skipped and not-logged days get no event. Conflict and unrecognised
+ * strings skip with a reason that names them; a missing Status throws, since
+ * the formula is the contract.
+ *
+ * The AM/PM Medication List formula strings hold what was actually taken — a
+ * single skipped med is removed from that day's relation.
  *
  * @param {Object} record - Notion page object
  * @param {Object} repo - IntegrationDatabase instance
- * @returns {Object|null} Object with { calendarId, event } or null if skip
+ * @returns {Object} { calendarId, event } or { skipped: true, reason }
  */
 function transformMedicationToCalendarEvent(record, repo) {
   const props = config.notion.properties.medications;
@@ -34,19 +42,30 @@ function transformMedicationToCalendarEvent(record, repo) {
     repo.extractProperty(record, config.notion.getPropertyName(prop));
 
   const date = get(props.date);
-  if (!date) return null;
+  if (!date) return { skipped: true, reason: "Missing date" };
 
-  // No Meds overrides everything → no event.
-  if (get(props.noMeds)) return null;
-
-  const amOn = !!get(props.amMeds);
-  const pmOn = !!get(props.pmMeds);
-
-  // Nothing taken → skip.
-  if (!amOn && !pmOn) return null;
-
-  const amMedList = parseMedList(get(props.amMedList));
-  const pmMedList = parseMedList(get(props.pmMedList));
+  const status = classifyDayStatus(get(props.status));
+  if (status.kind === "missing") {
+    throw new Error(
+      `Medications record for ${date} has no Status value — the Status formula on the 💊 2026 Medication DB is the sync contract`
+    );
+  }
+  if (status.kind === "conflict") {
+    return {
+      skipped: true,
+      reason: `Status ${status.raw} — a batch is both taken and skipped`,
+    };
+  }
+  if (status.kind === "unknown") {
+    return {
+      skipped: true,
+      reason: `Unknown Status "${status.raw}" — teach src/utils/day-status.js the new string`,
+    };
+  }
+  // skipped · pending · not-logged → no event (yet).
+  if (!status.am && !status.pm) {
+    return { skipped: true, reason: `Status ${status.raw}` };
+  }
 
   const calendarId = resolveCalendarId("medications", record, repo);
   if (!calendarId) {
@@ -57,20 +76,25 @@ function transformMedicationToCalendarEvent(record, repo) {
 
   // Title reflects which batches were taken (AM / PM / AM + PM).
   const tags = [];
-  if (amOn) tags.push("AM");
-  if (pmOn) tags.push("PM");
+  if (status.am) tags.push("AM");
+  if (status.pm) tags.push("PM");
 
   // Prefix must match ADDITIONAL_EMOJI_PREFIXES in config/calendar/summary-emoji-prefixes.js so yarn summarize can strip it.
   const summary = `💊 Medications (${tags.join(" + ")})`;
 
-  const lines = [];
-  if (amOn && amMedList.length) {
-    lines.push(`AM: ${amMedList.map((m) => `✅ ${m}`).join(", ")}`);
-  }
-  if (pmOn && pmMedList.length) {
-    lines.push(`PM: ${pmMedList.map((m) => `✅ ${m}`).join(", ")}`);
-  }
-  const description = lines.join("\n");
+  // One line per batch: the taken list, or ❌ skipped for the batch that
+  // wasn't (only a resolved day gets this far, so "not taken" = skipped).
+  const batchLine = (label, taken, list) => {
+    if (!taken) return `${label}: ❌ skipped`;
+    const meds = parseMedList(list);
+    return meds.length ? `${label}: ${meds.map((m) => `✅ ${m}`).join(", ")}` : null;
+  };
+  const description = [
+    batchLine("AM", status.am, get(props.amMedList)),
+    batchLine("PM", status.pm, get(props.pmMedList)),
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   const dateStr = typeof date === "string" ? date.split("T")[0] : date;
 

@@ -254,27 +254,43 @@ function autoDiscoverCollectors() {
 
 **Locations**: `src/config/notion/medications.js` and `src/config/notion/supplements.js`. The two DBs are siblings — each has its own Notion DB, Google Calendar, and transformer. They share the same one-way-from-Notion sync shape (event-ID pattern + orphan cleanup; no `Calendar Created` checkbox).
 
+#### Shared model (2026-11): the `Status` formula is the contract
+
+Each DB carries five checkboxes — `AM …` / `PM …` (taken), `AM … Skipped` / `PM … Skipped`, and `No Meds` / `No Supps` — and a `Status` **formula** that folds them into one string. The methodology lives in that formula; the pipeline only reads the result, through `src/utils/day-status.js`, which matches on words (`✅ Taken` and `Taken` are the same day, so the emoji can be restyled in Notion) and classifies:
+
+| Status | Kind | Calendar |
+|---|---|---|
+| `Taken` | taken | event `(AM + PM)` |
+| `Morning only` / `Evening only` | morning-only / evening-only | event `(AM)` / `(PM)`; the other batch reads `❌ skipped` |
+| `Skipped` — both skipped, or `No Meds` / `No Supps` | skipped | no event |
+| `… pending` — one batch logged, the other still open | pending | no event yet |
+| `Not logged` | not-logged | no event |
+| `Conflict` — a batch both taken and skipped | conflict | named skip |
+| anything else | unknown | named skip that quotes the string — teach `day-status.js` |
+
+Pending days get no event on purpose: this sync creates each day's event once (event-ID pattern) and never rewrites it, so an `(AM)` event written at breakfast would freeze the day there. A missing `Status` value throws — the formula is the contract, so a schema break fails loud rather than quietly syncing nothing.
+
+`scripts/retro-readiness.js` reads the same classifier from `collected.json`: not-logged days print as `not logged`, pending days as `half logged`; rows pulled before the column existed fall back to the checkboxes.
+
 #### Medications
 
 - **Per-day regimen via relations** – Each day row relates to the 💊 Medications List DB through `AM Medication` / `PM Medication`. The `AM Medication List` / `PM Medication List` **formula** properties render those relations as comma-separated name strings (`"Gabapentin, Sertraline"`) — the transformer reads the formulas, so it never resolves relation IDs to titles.
-- **Checkboxes** – `AM Meds` / `PM Meds` mark which batch was taken; `No Meds` overrides everything. A partially-skipped batch is recorded by removing the med from that day's relation, so the day's list always reflects what was actually taken.
+- **Partial batch** – A single skipped med is recorded by removing it from that day's relation, so the day's list always reflects what was actually taken. A whole skipped batch is the `… Skipped` checkbox.
 - **Regimen changes are pure data** – New Rx, dose change, or a temporary course means editing the Medications List DB and the day relations in Notion. No code change.
 
 **Calendar event behavior:**
 
-- **Summary**: `💊 Medications (AM)` / `💊 Medications (PM)` / `💊 Medications (AM + PM)` — reflects which batches were taken.
-- **Description**: One line per taken batch, e.g. `AM: ✅ Gabapentin, ✅ Sertraline`.
-- **Skip**: No event when `No Meds` is checked, the date is missing, or neither batch checkbox is checked.
+- **Summary**: `💊 Medications (AM)` / `💊 Medications (PM)` / `💊 Medications (AM + PM)` — the batches taken.
+- **Description**: One line per batch, e.g. `AM: ✅ Gabapentin, ✅ Sertraline`; a skipped batch reads `PM: ❌ skipped`.
 
 #### Supplements
 
-Single-checkbox DB. Schema: `Date`, `Calendar Event ID`, `Supplements` (checkbox), `No Supps` (checkbox).
+Schema: `Date`, `Calendar Event ID`, the five checkboxes, `Status`, plus item-level `AM Skipped` / `PM Skipped` multi-selects for misses inside a taken batch. The daily routine itself is still hardcoded as `SUPPLEMENT_ROUTINE` in `supplements.js` (the DB's `AM Sups LIst` / `PM Sups List` multi-selects aren't read yet); the multi-select option labels must match those names exactly.
 
 **Calendar event behavior:**
 
-- **Summary**: `🍬 Supplements`
-- **Description**: `✅ Supplements`
-- **Skip**: No event when `No Supps` is checked, `Supplements` is unchecked, or the date is missing.
+- **Summary**: `🍬 Supplements (AM + PM)`; when items were skipped inside a taken batch, ≤2 are named (`· skipped CoQ10`), 3+ counted (`· 3 skipped`).
+- **Description**: One line per batch in routine order with misses flipped, e.g. `AM: ✅ B-Complex, ❌ CoQ10, …`; a skipped batch reads `PM: ❌ skipped`.
 
 ---
 

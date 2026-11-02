@@ -6,10 +6,15 @@
 // so /retro-week can ask "fill these first, or run on what's there?" BEFORE
 // the walk, instead of tripping over holes at Beat 9. Sources and what counts
 // as dark:
-//   Meds / Supps  collected.json rows: a day is dark when AM, PM and No are
-//                 all unchecked (and, supps, both Skipped lists empty). A day
-//                 with no row at all is dark too. "None" (No Meds checked) is
-//                 a logged day, not a gap — intent is unknowable either way.
+//   Meds / Supps  collected.json rows, read through the DB's own Status
+//                 formula (src/utils/day-status.js): "not logged" is dark; a
+//                 day with one batch logged and the other still pending is
+//                 half logged — both print, since both need a hand. Taken /
+//                 only / skipped are logged days, not gaps — intent is
+//                 unknowable either way. A day with no row at all is dark.
+//                 Rows pulled before the Status column existed fall back to
+//                 the checkboxes: dark when every box is unchecked (and,
+//                 supps, both Skipped lists empty).
 //   Sleep         calendar.json normalWakeUp + sleepIn (Oura, bedtime-stamped):
 //                 distinct dates with a record vs. the 7 nights. Oura reaches
 //                 the calendar via collect → Notion → calendar → pull, so a
@@ -40,6 +45,7 @@ const journal = require("../data/journal.json");
 const plan = require("../data/plan.json");
 const collected = require("../data/collected.json");
 const calendar = require("../data/calendar.json");
+const { classifyDayStatus } = require("../src/utils/day-status");
 
 const weeks = plan.weeks || [];
 const journalEntries = journal.entries || [];
@@ -100,20 +106,37 @@ function describeDays(days, weekDays) {
 
 // ---- gap detectors --------------------------------------------------------
 
-/** Days in the week with no row, or a row with every tracker checkbox/list empty. */
-function darkTrackerDays(rows, weekDays, boxes, lists = []) {
+/**
+ * Split a tracker's elapsed days into the two kinds of gap: `dark` (no row, or
+ * Status "not logged") and `pending` (one batch logged, the other still open).
+ * Rows without a Status value — pulled before the column existed — fall back
+ * to the checkboxes: dark when no box is checked and no list has items.
+ */
+function trackerGaps(rows, weekDays, boxes, lists = []) {
   const byDate = new Map();
   for (const r of rows || []) {
     const d = dateOnly(r.Date);
     if (d) byDate.set(d, r);
   }
-  return weekDays.filter((d) => {
+  const dark = [];
+  const pending = [];
+  for (const d of weekDays) {
     const r = byDate.get(d);
-    if (!r) return true;
+    if (!r) {
+      dark.push(d);
+      continue;
+    }
+    const status = classifyDayStatus(r.Status);
+    if (status.kind !== "missing") {
+      if (status.kind === "not-logged") dark.push(d);
+      else if (status.kind === "pending") pending.push(d);
+      continue;
+    }
     const anyBox = boxes.some((b) => r[b] === true);
     const anyList = lists.some((l) => Array.isArray(r[l]) && r[l].length > 0);
-    return !anyBox && !anyList;
-  });
+    if (!anyBox && !anyList) dark.push(d);
+  }
+  return { dark, pending };
 }
 
 /** Distinct week dates carrying an Oura sleep record (either wake-up calendar). */
@@ -247,14 +270,19 @@ for (let wk = start; wk <= end; wk++) {
     const evenings = emptyEveningDays(startDate, lastDay);
     if (evenings.length) gaps.push(`Journal   evening half empty ${describeDays(evenings, elapsed)}`);
 
-    const medsDark = darkTrackerDays(collected.medications, elapsed, ["AM Meds", "PM Meds", "No Meds"]);
-    if (medsDark.length) gaps.push(`Meds      not logged ${describeDays(medsDark, elapsed)}`);
+    const meds = trackerGaps(collected.medications, elapsed, [
+      "AM Meds", "PM Meds", "AM Meds Skipped", "PM Meds Skipped", "No Meds",
+    ]);
+    if (meds.dark.length) gaps.push(`Meds      not logged ${describeDays(meds.dark, elapsed)}`);
+    if (meds.pending.length) gaps.push(`Meds      half logged ${describeDays(meds.pending, elapsed)}`);
 
-    const suppsDark = darkTrackerDays(
+    const supps = trackerGaps(
       collected.supplements, elapsed,
-      ["AM Supps", "PM Supps", "No Supps"], ["AM Skipped", "PM Skipped"]
+      ["AM Supps", "PM Supps", "AM Supps Skipped", "PM Supps Skipped", "No Supps"],
+      ["AM Skipped", "PM Skipped"]
     );
-    if (suppsDark.length) gaps.push(`Supps     not logged ${describeDays(suppsDark, elapsed)}`);
+    if (supps.dark.length) gaps.push(`Supps     not logged ${describeDays(supps.dark, elapsed)}`);
+    if (supps.pending.length) gaps.push(`Supps     half logged ${describeDays(supps.pending, elapsed)}`);
 
     const nights = sleepNights(elapsed);
     if (nights.length < n) {

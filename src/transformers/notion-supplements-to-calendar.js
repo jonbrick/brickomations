@@ -3,9 +3,10 @@
 const config = require("../config");
 const { SUPPLEMENT_ROUTINE } = require("../config/notion/supplements");
 const { resolveCalendarId } = require("../utils/calendar-mapper");
+const { classifyDayStatus } = require("../utils/day-status");
 
 /**
- * Build a "AM: ✅ B-Complex, ❌ Creatine" line for a batch.
+ * Build a "AM: ✅ B-Complex, ❌ Creatine" line for a taken batch.
  * Items present in `skipped` flip from ✅ to ❌.
  */
 function buildBatchLine(label, items, skipped) {
@@ -17,13 +18,21 @@ function buildBatchLine(label, items, skipped) {
 /**
  * Transform Notion supplement record to Google Calendar event.
  *
- * Model: assume-the-routine, log-exceptions. AM Supps / PM Supps say which
- * batch was taken; AM Skipped / PM Skipped multi-selects flag individual
- * misses (matched against SUPPLEMENT_ROUTINE). `No Supps` overrides everything.
+ * Model (2026-11): the day's `Status` formula is the contract. It folds the
+ * AM Supps / PM Supps / AM Supps Skipped / PM Supps Skipped / No Supps
+ * checkboxes into one string (see utils/day-status.js); only a resolved day
+ * — taken, morning only, evening only — becomes an event. A day with one
+ * batch still pending gets no event yet: this sync creates each day's event
+ * once and never rewrites it. Skipped and not-logged days get no event.
+ * Conflict and unrecognised strings skip with a reason that names them; a
+ * missing Status throws.
+ *
+ * Inside a taken batch, the AM Skipped / PM Skipped multi-selects name the
+ * individual items missed (matched against SUPPLEMENT_ROUTINE).
  *
  * @param {Object} record - Notion page object
  * @param {Object} repo - IntegrationDatabase instance
- * @returns {Object|null} Object with { calendarId, event } or null if skip
+ * @returns {Object} { calendarId, event } or { skipped: true, reason }
  */
 function transformSupplementToCalendarEvent(record, repo) {
   const props = config.notion.properties.supplements;
@@ -31,18 +40,33 @@ function transformSupplementToCalendarEvent(record, repo) {
     repo.extractProperty(record, config.notion.getPropertyName(prop));
 
   const date = get(props.date);
-  if (!date) return null;
+  if (!date) return { skipped: true, reason: "Missing date" };
 
-  // No Supps overrides everything → no event.
-  if (get(props.noSupps)) return null;
+  const status = classifyDayStatus(get(props.status));
+  if (status.kind === "missing") {
+    throw new Error(
+      `Supplements record for ${date} has no Status value — the Status formula on the 🍬 2026 Supplements DB is the sync contract`
+    );
+  }
+  if (status.kind === "conflict") {
+    return {
+      skipped: true,
+      reason: `Status ${status.raw} — a batch is both taken and skipped`,
+    };
+  }
+  if (status.kind === "unknown") {
+    return {
+      skipped: true,
+      reason: `Unknown Status "${status.raw}" — teach src/utils/day-status.js the new string`,
+    };
+  }
+  // skipped · pending · not-logged → no event (yet).
+  if (!status.am && !status.pm) {
+    return { skipped: true, reason: `Status ${status.raw}` };
+  }
 
-  const amOn = !!get(props.amSupps);
-  const pmOn = !!get(props.pmSupps);
   const amSkipped = get(props.amSkipped) || [];
   const pmSkipped = get(props.pmSkipped) || [];
-
-  // Nothing taken or logged → skip.
-  if (!amOn && !pmOn) return null;
 
   const calendarId = resolveCalendarId("supplements", record, repo);
   if (!calendarId) {
@@ -51,12 +75,12 @@ function transformSupplementToCalendarEvent(record, repo) {
     );
   }
 
-  // Title reflects which batches were taken (AM / PM / AM + PM) plus, when the
-  // day wasn't fully compliant, the items skipped within those batches:
+  // Title reflects which batches were taken (AM / PM / AM + PM) plus, when a
+  // taken batch wasn't fully compliant, the items skipped within it:
   //   ≤2 skips → names them; 3+ → a count.
   const tags = [];
-  if (amOn) tags.push("AM");
-  if (pmOn) tags.push("PM");
+  if (status.am) tags.push("AM");
+  if (status.pm) tags.push("PM");
 
   // Unique skipped items across the taken batches, in routine order.
   const skipped = [];
@@ -70,8 +94,8 @@ function transformSupplementToCalendarEvent(record, repo) {
       }
     }
   };
-  collectSkips(amOn, amSkipped);
-  collectSkips(pmOn, pmSkipped);
+  collectSkips(status.am, amSkipped);
+  collectSkips(status.pm, pmSkipped);
 
   let skipPart = "";
   if (skipped.length === 1 || skipped.length === 2) {
@@ -81,13 +105,14 @@ function transformSupplementToCalendarEvent(record, repo) {
   }
 
   // Prefix must match ADDITIONAL_EMOJI_PREFIXES in config/calendar/summary-emoji-prefixes.js so yarn summarize can strip it.
-  const summary = tags.length
-    ? `🍬 Supplements (${tags.join(" + ")}${skipPart})`
-    : "🍬 Supplements";
+  const summary = `🍬 Supplements (${tags.join(" + ")}${skipPart})`;
 
-  const lines = [];
-  if (amOn) lines.push(buildBatchLine("AM", SUPPLEMENT_ROUTINE.am, amSkipped));
-  if (pmOn) lines.push(buildBatchLine("PM", SUPPLEMENT_ROUTINE.pm, pmSkipped));
+  // One line per batch: the routine with misses flipped to ❌, or ❌ skipped
+  // for the batch that wasn't taken (a resolved day's "not taken" = skipped).
+  const lines = [
+    status.am ? buildBatchLine("AM", SUPPLEMENT_ROUTINE.am, amSkipped) : "AM: ❌ skipped",
+    status.pm ? buildBatchLine("PM", SUPPLEMENT_ROUTINE.pm, pmSkipped) : "PM: ❌ skipped",
+  ];
   const description = lines.join("\n");
 
   const dateStr = typeof date === "string" ? date.split("T")[0] : date;

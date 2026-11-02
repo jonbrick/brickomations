@@ -52,11 +52,24 @@ function loadJson(name) {
 // Day-level health logs (collected.json). Keep only the fields Beat 9 reads —
 // the raw rows carry relation-ID arrays, formula strings and "⬇️" divider
 // columns that bury the checkboxes past any terminal's output cutoff.
-const MEDS_FIELDS = ["Date", "AM Meds", "PM Meds", "No Meds"];
+// Status is the DB's own formula over the five checkboxes (see
+// src/utils/day-status.js); the boxes ride along for backfill writes.
+const MEDS_FIELDS = [
+  "Date",
+  "Status",
+  "AM Meds",
+  "PM Meds",
+  "AM Meds Skipped",
+  "PM Meds Skipped",
+  "No Meds",
+];
 const SUPPS_FIELDS = [
   "Date",
+  "Status",
   "AM Supps",
   "PM Supps",
+  "AM Supps Skipped",
+  "PM Supps Skipped",
   "No Supps",
   "AM Skipped",
   "PM Skipped",
