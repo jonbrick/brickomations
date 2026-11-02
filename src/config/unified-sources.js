@@ -292,6 +292,10 @@ const CALENDARS = {
     ignoreDeclinedEvents: true,
     ignoreAllDayEvents: true,
     excludeKeywords: ["sleep", "nap"],
+    // `Planned:` blocks are /plan-week's intent markers on the main calendar —
+    // the actuals live on the habit calendars. Prefix-only on purpose: a
+    // keyword exclude would also drop "Unplanned hang".
+    excludePrefixes: ["Planned:"],
     id: "personalCalendar",
     envVar: "PERSONAL_MAIN_CALENDAR_ID",
     name: "Personal Calendar",

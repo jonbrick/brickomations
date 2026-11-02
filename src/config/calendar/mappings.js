@@ -437,6 +437,8 @@ function buildCalendarFetches(
       const ignoreAllDayEvents = calendarDef?.ignoreAllDayEvents ?? false;
       const excludeKeywords =
         calendarDef?.excludeKeywords ?? source.excludeKeywords ?? [];
+      const excludePrefixes =
+        calendarDef?.excludePrefixes ?? source.excludePrefixes ?? [];
       const ignoreDeclinedEvents =
         calendarDef?.ignoreDeclinedEvents ??
         source.ignoreDeclinedEvents ??
@@ -449,6 +451,7 @@ function buildCalendarFetches(
         accountType,
         ignoreAllDayEvents,
         excludeKeywords,
+        excludePrefixes,
         ignoreDeclinedEvents,
       });
     }

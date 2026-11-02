@@ -6,6 +6,32 @@ const { CALENDARS } = require("../config/unified-sources");
 const config = require("../config");
 
 /**
+ * True when an event title should be dropped from the rollup.
+ *
+ *  - excludeKeywords — case-insensitive substring match anywhere in the title.
+ *  - excludePrefixes — case-insensitive match at the START of the title only.
+ *    `Planned:` blocks are /plan-week's intent markers on the main personal
+ *    calendar; the actuals live on the habit calendars. A substring test would
+ *    also eat "Unplanned hang", so the prefix is never checked mid-title.
+ *
+ * @param {string} summary - Event title
+ * @param {Object} options
+ * @param {Array<string>} options.excludeKeywords
+ * @param {Array<string>} options.excludePrefixes
+ * @returns {boolean}
+ */
+function isExcludedSummary(summary, { excludeKeywords = [], excludePrefixes = [] } = {}) {
+  const text = String(summary || "").trim().toLowerCase();
+  if ((excludeKeywords || []).some((k) => text.includes(String(k).toLowerCase()))) {
+    return true;
+  }
+  if ((excludePrefixes || []).some((p) => text.startsWith(String(p).toLowerCase()))) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Fetch calendar events for a date range and extract summary data
  *
  * @param {string} calendarId - Google Calendar ID
@@ -15,6 +41,7 @@ const config = require("../config");
  * @param {string} options.accountType - "personal" or "work" (default: "personal")
  * @param {boolean} options.ignoreAllDayEvents - Whether to filter out all-day events (default: false)
  * @param {Array<string>} options.excludeKeywords - Keywords to filter out events whose summary contains any keyword (case-insensitive, default: [])
+ * @param {Array<string>} options.excludePrefixes - Prefixes to filter out events whose summary STARTS with any of them (case-insensitive, default: []). `Planned:` blocks are /plan-week's intent markers, not actuals.
  * @param {boolean} options.ignoreDeclinedEvents - When true, include only events where the user's response is "accepted" or "tentative"; exclude "declined" and "needsAction" (default: false)
  * @param {string} options.calendarKey - Calendar key for config lookup (default: null)
  * @returns {Promise<Array>} Array of events with { date, durationHours }
@@ -24,6 +51,7 @@ async function fetchCalendarSummary(calendarId, startDate, endDate, options = {}
     accountType = "personal",
     ignoreAllDayEvents = false,
     excludeKeywords = [],
+    excludePrefixes = [],
     ignoreDeclinedEvents = false,
     calendarKey = null,
   } = options;
@@ -101,16 +129,10 @@ async function fetchCalendarSummary(calendarId, startDate, endDate, options = {}
           }
         }
 
-        // Filter events by excludeKeywords (case-insensitive)
+        // Drop excluded titles: a keyword anywhere, or a plan-marker prefix (`Planned:`)
         const eventSummary = event.summary || "Untitled Event";
-        if (excludeKeywords && excludeKeywords.length > 0) {
-          const summaryLower = eventSummary.toLowerCase();
-          const shouldExclude = excludeKeywords.some((keyword) =>
-            summaryLower.includes(keyword.toLowerCase())
-          );
-          if (shouldExclude) {
-            return null;
-          }
+        if (isExcludedSummary(eventSummary, { excludeKeywords, excludePrefixes })) {
+          return null;
         }
 
         return {
@@ -134,4 +156,5 @@ async function fetchCalendarSummary(calendarId, startDate, endDate, options = {}
 
 module.exports = {
   fetchCalendarSummary,
+  isExcludedSummary,
 };
