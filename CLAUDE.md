@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Brickomations is a personal data pipeline: external APIs (GitHub, Oura, Strava, Steam, Withings) → Notion → Google Calendar → weekly/monthly summaries. Plain Node.js (CommonJS), no TypeScript, no automated tests.
+Brickomations is a personal data pipeline: external APIs (GitHub, Oura, Strava, Steam, Withings) → Notion → Google Calendar → weekly/monthly summaries. Plain Node.js (CommonJS), no TypeScript. Tests: `yarn test` — a dependency-free runner (`test/run.js`) over `test/*.test.js`; cases may be sync or async.
 
 **Script quick reference: `YARN-SCRIPTS.md` (repo root).** Read it before exploring `cli/` or `package.json` — it maps every yarn shortcut, what it touches, and which ones prompt.
 
@@ -29,6 +29,7 @@ Reflection/planning skills (`/retro-week`, `/plan-*`, `/recap-month`) live in `~
 - **Batch operations must be idempotent** and safe for multi-week runs.
 - **Pre-stage data for LLMs.** Agents reading flat JSON/markdown don't burn API tokens; the script pays for itself the first time it runs.
 - **Fail loud, never partial success.** When a sync stage errors, the whole pipeline bails. Don't propose "exit 0 if at least one succeeded" or "log + skip the broken source" — stale data is harder to notice than a missing run.
+- **Reads retry, writes never.** Notion reads (`databases.query`, `pages.retrieve`, `blocks.children.list`) go through `NotionDatabase._withRetry` → `src/utils/retry.js`: up to 3 retries on 5xx / 429 / request timeout, 1 s → 2 s → 4 s backoff from `config.sources.retryConfig`, `Retry-After` honored. Creates / updates / deletes / appends make exactly one attempt — a 502 after a create may have landed server-side, and a retry would duplicate it. Retries exhausted → same error, same exit 1 (fail loud still holds). PR #234, Mon 2026-11-02.
 - **Bounded runtime.** Every scheduled job has a hard wall-clock timeout. On timeout: SIGTERM → grace → SIGKILL.
 
 ## Conventions
