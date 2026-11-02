@@ -118,10 +118,14 @@ function darkTrackerDays(rows, weekDays, boxes, lists = []) {
 
 /** Distinct week dates carrying an Oura sleep record (either wake-up calendar). */
 function sleepNights(weekDays) {
+  // Sleep records are bedtime-stamped; a night belongs to the morning it
+  // precedes, so key on the wake date (end), never the bedtime date (start).
+  // A late night (bed after midnight) would otherwise land on the next day,
+  // and two nights could collapse onto one date.
   const dates = new Set();
   for (const key of ["normalWakeUp", "sleepIn"]) {
     for (const e of calendar[key] || []) {
-      const d = dateOnly(e.start);
+      const d = dateOnly(e.end) || dateOnly(e.start);
       if (d && weekDays.includes(d)) dates.add(d);
     }
   }
