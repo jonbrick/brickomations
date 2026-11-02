@@ -132,6 +132,7 @@ async function aggregateCalendarDataForWeek(
           accountType: fetchConfig.accountType,
           ignoreAllDayEvents: fetchConfig.ignoreAllDayEvents,
           excludeKeywords: fetchConfig.excludeKeywords,
+          excludePrefixes: fetchConfig.excludePrefixes,
           ignoreDeclinedEvents: fetchConfig.ignoreDeclinedEvents,
           calendarKey: fetchConfig.calendarKey,
         }

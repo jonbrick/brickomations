@@ -143,7 +143,8 @@ Calendar definitions can include filter properties:
 
 - `ignoreAllDayEvents`: Filter out all-day events when fetching (used by sleep calendars)
 - `ignoreDeclinedEvents`: Filter out declined events (used by personal/work calendars)
-- `excludeKeywords`: Array of keywords to filter events by summary text
+- `excludeKeywords`: Array of keywords to filter events by summary text (substring, anywhere)
+- `excludePrefixes`: Array of prefixes to filter events whose summary starts with one (e.g. `Planned:` plan markers on the personal calendar — intent, not actuals)
 
 ````
 
