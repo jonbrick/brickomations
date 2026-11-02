@@ -190,9 +190,7 @@ class MonthsDatabase extends NotionDatabase {
     const weeks = [];
     for (const rel of weekRelations) {
       try {
-        const weekPage = await this.client.pages.retrieve({
-          page_id: rel.id,
-        });
+        const weekPage = await this.getPage(rel.id);
 
         const weekNumber = this.extractWeekNumberFromPage(weekPage);
         if (weekNumber !== null) {
