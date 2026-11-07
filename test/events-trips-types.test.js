@@ -40,9 +40,9 @@ module.exports = {
   "a record with no type lands under (no type), last"() {
     const g = groupBySideAndType([
       ev({ Category: "💼 Work" }),
-      ev({ Category: "💼 Work", "WORK Category": "🚀 Work Milestone" }),
+      ev({ Category: "💼 Work", "WORK Category": "🎉 Work Milestone" }),
     ]);
-    assertEqual(g[0].types.map((t) => t.type).join(","), `🚀 Work Milestone,${NO_TYPE}`);
+    assertEqual(g[0].types.map((t) => t.type).join(","), `🎉 Work Milestone,${NO_TYPE}`);
   },
   "a trip's multi-select Subcategory is the type, joined"() {
     assertEqual(typeOf({ Category: "💼 Work", Subcategory: ["🌱 Personal Trip", "💼 Work Trip"] }), "🌱 Personal Trip · 💼 Work Trip");
@@ -58,8 +58,8 @@ module.exports = {
   // --- tags ---
   "typeTag carries side · type · status"() {
     assertEqual(
-      typeTag({ Category: "💼 Work", "WORK Category": "🚀 Work Milestone", Status: "🟢 Done" }),
-      "💼 Work · 🚀 Work Milestone · 🟢 Done"
+      typeTag({ Category: "💼 Work", "WORK Category": "🎉 Work Milestone", Status: "🟢 Done" }),
+      "💼 Work · 🎉 Work Milestone · 🟢 Done"
     );
     assertEqual(typeTag({ Category: "🫥 N/A", Status: "🟡 Scheduled" }), "🫥 N/A · 🟡 Scheduled");
     assertEqual(typeTag(null), "");
@@ -70,14 +70,14 @@ module.exports = {
     const lines = sideTypeLines(
       "EVENTS (2)",
       [
-        ev({ "Event Name": "Kara last day", Category: "💼 Work", "WORK Category": "🚀 Work Milestone" }),
+        ev({ "Event Name": "Kara last day", Category: "💼 Work", "WORK Category": "🎉 Work Milestone" }),
         ev({ "Event Name": "Mercury", Category: "🫥 N/A" }),
       ],
       (r) => r["Event Name"]
     );
     assertEqual(
       lines.join("\n"),
-      ["EVENTS (2)", "  💼 work (1)", "    🚀 Work Milestone", "      Kara last day", "  🫥 n/a (1)", "    Mercury"].join("\n")
+      ["EVENTS (2)", "  💼 work (1)", "    🎉 Work Milestone", "      Kara last day", "  🫥 n/a (1)", "    Mercury"].join("\n")
     );
   },
   "sideTypeLines honors a caller indent (UPCOMING nests one level deeper)"() {
