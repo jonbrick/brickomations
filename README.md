@@ -623,7 +623,7 @@ yarn tokens:refresh # Refresh expired tokens
 
 ### Automation (launchd)
 
-Brickomations runs automatically 9x daily — every 2 hours, 7 AM–11 PM (7, 9, 11 AM, 1, 3, 5, 7, 9, 11 PM) via launchd. The full automation surface (Cowork morning-brief, evening-processor, watchdog, app-launcher, pmset wakes) lives in `~/projects/brickocampus/_automation/_automation-readme.md`. This section covers `com.brickomations.daily` only:
+Brickomations runs automatically 9x daily — every 2 hours, 7 AM–11 PM (7, 9, 11 AM, 1, 3, 5, 7, 9, 11 PM) via launchd. The full automation surface (Cowork morning-brief, evening-processor, watchdog + app relaunch, pmset wakes) lives in `~/projects/brickocampus/_automation/_automation-readme.md`. This section covers `com.brickomations.daily` only:
 
 ```
 tokens:refresh → collect → update → summarize → aggregate → pull → vault-sync

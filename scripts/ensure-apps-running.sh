@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Ensure Claude Desktop and Obsidian are running. `open -a` is idempotent —
 # it foregrounds an already-running app or launches one that isn't.
-# Called by com.brickomations.app-launcher.plist before each Cowork event so the
-# Cowork tasks (running inside Claude Desktop) and Granola Sync (inside Obsidian)
-# can fire reliably.
+# Called by heartbeat-watchdog.sh (every 5 min inside the awake window) whenever
+# either app has no main process, so the Cowork tasks (running inside Claude
+# Desktop) and Granola Sync (inside Obsidian) can fire reliably. Not scheduled
+# on its own; `touch local/apps-hold` suspends the relaunch.
 #
 # Logs each invocation to local/logs/app-launcher.log with a timestamp + per-app
 # result. The stdout/stderr captured by launchd is silent on success (`open -a`

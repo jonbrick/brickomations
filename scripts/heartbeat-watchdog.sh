@@ -13,8 +13,11 @@
 # Schedule (keep in sync with _automation/_automation-readme.md Schedule table):
 #   brickomations-daily-brief        — 5:50 AM
 #   pull-linear                 — 6:30 AM
-#   app-launcher                — 5:55 AM, 8:40 PM (ensure-apps-running.sh; failed ping
-#                                 when an app didn't open or Obsidian never loaded)
+#   app-launcher                — no schedule: ensure-apps-running.sh runs from this
+#                                 script whenever Claude Desktop or Obsidian has no
+#                                 main process in the awake window (ensure_apps_running
+#                                 below); its failed ping (an app didn't open, or
+#                                 Obsidian never loaded) is surfaced here
 #   yarn-sync                   — every 2 hr, 7 AM–11 PM (7, 9, 11 AM, 1, 3, 5, 7, 9, 11 PM)
 #   cowork-morning-brief        — 6 AM
 #   cowork-evening-processor    — 9:20 PM (after the 9:15 PM evening render)
@@ -180,7 +183,15 @@ check_job() {
     return
   fi
 
-  # Check status
+  alert_if_failed "$job" "$ping_file" "$ping_ts_iso"
+}
+
+# status=failed in a ping file → one alert, keyed on the ping's timestamp.
+# Shared by check_job (scheduled jobs) and check_unscheduled_ping.
+alert_if_failed() {
+  local job="$1"
+  local ping_file="$2"
+  local ping_ts_iso="$3"
   local status
   status=$(sed -n 's/.*"status":"\([^"]*\)".*/\1/p' "$ping_file")
   if [ "$status" = "failed" ]; then
@@ -197,6 +208,18 @@ check_job() {
       alert "$job" "status=failed" "$key"
     fi
   fi
+}
+
+# A ping with no schedule: nothing to miss, only status=failed matters.
+check_unscheduled_ping() {
+  local job="$1"
+  local ping_file="$HEARTBEAT_DIR/${job}.json"
+  if [ ! -f "$ping_file" ]; then
+    return
+  fi
+  local ping_ts_iso
+  ping_ts_iso=$(sed -n 's/.*"timestamp":"\([^"]*\)".*/\1/p' "$ping_file")
+  alert_if_failed "$job" "$ping_file" "${ping_ts_iso:-$(stat -f '%m' "$ping_file")}"
 }
 
 # ---------------------------------------------------------------------------
@@ -271,7 +294,7 @@ obsidian_status() {
     since=$(date -j -f '%a %b %d %T %Y' "$since" '+%a %H:%M' 2>/dev/null || echo "?")
     echo "Obsidian process up since $since but the app never loaded — likely a dialog on the mini's screen"
   else
-    echo "Obsidian NOT running"
+    echo "Obsidian NOT running$(apps_hold_note)"
   fi
 }
 
@@ -346,6 +369,61 @@ check_granola_sync() {
   fi
 }
 
+# ---------------------------------------------------------------------------
+# Apps the schedule depends on. Cowork tasks (6:00 AM, 9:20 PM) run inside
+# Claude Desktop; Granola Sync (every 30 min) runs inside Obsidian. The
+# invariant is "both up while the mini is awake", so every tick re-opens
+# whichever one has no main process, via ensure-apps-running.sh — the script
+# the retired 5:55 AM / 8:40 PM app-launcher job used to run on a fixed clock.
+# Only an absent main process triggers a relaunch: a main process with no
+# renderer is a blocked launch (Gatekeeper's first-open prompt on the headless
+# screen, Thu 2026-10-29) that another `open -a` can't fix — the attempt that
+# hit it leaves a failed app-launcher ping (surfaced below) and the
+# granola-sync alert names the state. `local/apps-hold` (gitignored) suspends
+# relaunching, for deliberately closing the apps; the granola-sync alert says
+# when it's set.
+# ---------------------------------------------------------------------------
+APPS_WINDOW_START="05:45"   # mini wakes 05:45; Claude must be up for Cowork at 06:00
+APPS_WINDOW_END="23:00"     # caffeinate releases 23:30; nothing needs the apps after
+APPS_HOLD_FILE="$REPO_ROOT/local/apps-hold"
+ENSURE_APPS_SH="$REPO_ROOT/scripts/ensure-apps-running.sh"
+
+apps_hold_note() {
+  if [ -f "$APPS_HOLD_FILE" ]; then
+    echo " (apps-hold set)"
+  fi
+}
+
+ensure_apps_running() {
+  local now_hm
+  now_hm=$(date +%H:%M)
+  if [[ "$now_hm" < "$APPS_WINDOW_START" || "$now_hm" > "$APPS_WINDOW_END" ]]; then
+    return
+  fi
+  if [ -f "$APPS_HOLD_FILE" ]; then
+    return
+  fi
+
+  # Main-process names: Claude.app/Contents/MacOS/Claude, Obsidian.app/.../Obsidian.
+  # -x is exact and case-sensitive, so Claude Code's lowercase `claude` never matches.
+  local down=""
+  pgrep -xq Claude   || down="Claude"
+  pgrep -xq Obsidian || down="${down:+$down + }Obsidian"
+  if [ -z "$down" ]; then
+    return
+  fi
+
+  if [ "${WATCHDOG_DRY_RUN:-}" = "1" ]; then
+    echo "DRY RUN — would relaunch: $down not running"
+    return
+  fi
+  # The script logs to local/logs/app-launcher.log and writes the app-launcher
+  # ping itself (ok / failed); nothing to capture here.
+  "$ENSURE_APPS_SH" >/dev/null 2>&1 || true
+}
+
+ensure_apps_running
+
 check_job "brickomations-daily-brief" "05:50" 600
 
 check_job "pull-linear" "06:30" 900
@@ -358,10 +436,10 @@ check_job "cowork-morning-brief" "06:00" 1800
 
 check_job "cowork-evening-processor" "21:20" 1800
 
-# ensure-apps-running.sh: ok once both apps opened and Obsidian has a renderer,
-# failed otherwise (it waits ≤90 s). "bootstrap": no ping file until its first
-# run under this code, so a missing file isn't a miss.
-check_job "app-launcher" "05:55 20:40" 300 bootstrap
+# ensure-apps-running.sh runs only when ensure_apps_running found an app down,
+# so there's no schedule to miss — just a failed ping to surface: `open -a`
+# returned non-zero, or Obsidian showed no renderer within 90 s.
+check_unscheduled_ping "app-launcher"
 
 check_granola_sync
 
