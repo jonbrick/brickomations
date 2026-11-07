@@ -35,15 +35,29 @@ install_one() {
   echo "  plist: $dest"
 }
 
+# Labels this repo used to install. Unloaded and removed if a previous install
+# left them behind, so the mini matches the templates after a pull.
+retire_one() {
+  local label="$1"
+  local dest="$LAUNCHAGENTS_DIR/${label}.plist"
+  if [ -f "$dest" ]; then
+    echo "Retiring $label"
+    launchctl unload "$dest" 2>/dev/null || true
+    rm -f "$dest"
+    echo "  removed: $dest"
+  fi
+}
+
 install_one "com.brickomations.daily"
 install_one "com.brickomations.daily-brief" # pre-stages briefs/<date>.json at 05:50
 install_one "com.brickomations.pull-linear" # caches Linear projects + assigned issues at 06:30
-install_one "com.brickomations.app-launcher"
 install_one "com.brickomations.watchdog"   # push-based heartbeat; reads ping files
 install_one "com.brickomations.caffeinate" # holds idle sleep off 05:45–23:30 daily
 install_one "com.brickomations.daily-text-morning" # texts ### MORNING SUMMARY at 06:20 (polls to 06:35)
 install_one "com.brickomations.evening-render"      # fills Tasks/Completed Events/Calendar at 21:15 (before the 21:20 processor)
 install_one "com.brickomations.daily-text-evening"  # texts ### Evening Summary at 21:45 (polls to 22:00)
+
+retire_one "com.brickomations.app-launcher" # folded into the watchdog: it relaunches Claude/Obsidian on any 5-min tick that finds one closed
 
 echo ""
 echo "Done."
