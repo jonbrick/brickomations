@@ -724,7 +724,6 @@ Full pipeline runs automatically via launchd: `tokens:refresh → collect → up
 
 | Command | Purpose | Interactive |
 |---------|---------|-------------|
-| `yarn plan` | Parse yarn plan data | No |
 | `yarn logs` | View today's automation log | No |
 | `yarn tokens` | Check all token status, refresh expired OAuth | Yes |
 | `yarn tokens:setup` | Run OAuth setup wizard | Yes |

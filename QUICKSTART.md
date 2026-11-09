@@ -109,7 +109,6 @@ Reflection/planning skills (`/retro-week`, `/plan-*`, `/recap-month`) live in th
 ### Utilities
 
 ```bash
-yarn plan              # Parse yarn plan data
 yarn logs              # View today's automation log
 yarn tokens            # Check all token status, refresh expired OAuth
 yarn tokens:setup      # Run OAuth setup wizard

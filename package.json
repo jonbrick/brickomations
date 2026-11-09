@@ -5,7 +5,6 @@
   "main": "src/index.js",
   "scripts": {
     "test": "node test/run.js",
-    "plan": "node cli/plan-parse.js",
     "pull": "node cli/pull.js",
     "pull:linear": "node cli/pull-linear.js",
     "linear:week": "node cli/pull-linear.js --tasks-only --days=8",
