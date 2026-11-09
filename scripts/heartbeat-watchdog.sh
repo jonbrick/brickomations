@@ -240,6 +240,10 @@ check_unscheduled_ping() {
 #      written, so it's a backstop: older than GRANOLA_PROGRESS_SEC means
 #      nothing has landed for days even though cycles run.
 #
+# Debug logging runs ~20 MB/day, so `yarn sync`'s granola-logs step
+# (cli/rotate-granola-logs.js) trashes every log but the newest — the only one
+# signals 1–2 read. Keep logging on; latestSyncTime alone can't see liveness.
+#
 # The vault reads live in scripts/granola-state.js, not here. The vault is
 # Obsidian's iCloud container and macOS TCC guards it: a shell script run by
 # launchd is a platform binary tccd never prompts for and never checks Files &

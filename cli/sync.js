@@ -76,6 +76,9 @@ const STEPS = [
   { name: "aggregate", cmd: `${NODE} cli/aggregate-month.js --auto${rangeFlag}` },
   { name: "pull", cmd: `${NODE} cli/pull.js --auto`, timeout: 8 * 60 * 1000 },
   { name: "vault-sync", cmd: `${NODE} cli/vault-sync.js --auto` },
+  // Trash every Granola Sync debug log but the newest — the watchdog reads only
+  // that one, and the rest sync to every device via the vault's iCloud container.
+  { name: "granola-logs", cmd: `${NODE} cli/rotate-granola-logs.js --auto` },
   // Deliberately no ${rangeFlag}: Daily Records doesn't backfill. The step's
   // own --auto window is fixed at yesterday→tomorrow (missing notes skip), so
   // the sync-wide 3-week window can't create rows for days whose notes only
