@@ -32,8 +32,8 @@ const pretty = (s) => {
 
 // Lane names per side (Overall is handled separately — it's a sentence, not
 // bullets). Canon: notion-conventions § 2026 Months.
-const PERSONAL_LANES = ["Personal", "Interpersonal", "Home", "Physical Health", "Mental Health"];
-const WORK_LANES = ["Design", "Coding", "Research", "Admin"];
+const PERSONAL_LANES = ["Hobbies", "Interpersonal", "Home", "Physical Health", "Mental Health", "Cooking", "Admin"];
+const WORK_LANES = ["Design", "Coding", "Research", "Admin", "Hiring & Team"];
 const PERSONAL_OVERALL = "Overall Personal Plan";
 const WORK_OVERALL = "Overall Work Plan";
 

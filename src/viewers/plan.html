@@ -96,7 +96,7 @@
       /* --- Summary --- */
       .summary-table {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, 1fr);
         gap: 1px;
         background: var(--border);
         border: 1px solid var(--border);
@@ -469,13 +469,15 @@
                 wp?.["My Overall Work Plan"] ||
                 wp?.["AI Overall Work Plan"] ||
                 "",
-              personal: pp?.["My Personal"] || pp?.["AI Personal"] || "",
+              hobbies: pp?.["My Hobbies"] || pp?.["AI Hobbies"] || "",
               interpersonal:
                 pp?.["My Interpersonal"] || pp?.["AI Interpersonal"] || "",
               home: pp?.["My Home"] || pp?.["AI Home"] || "",
               health:
                 pp?.["My Physical Health"] || pp?.["AI Physical Health"] || "",
               mental: pp?.["My Mental Health"] || pp?.["AI Mental Health"] || "",
+              cooking: pp?.["My Cooking"] || pp?.["AI Cooking"] || "",
+              admin: pp?.["My Admin"] || pp?.["AI Admin"] || "",
             },
             weeks: weekIds,
           };
@@ -635,11 +637,13 @@
       function renderSummary(m) {
         const f = [
           { k: "work", l: "💼 Work" },
-          { k: "personal", l: "🌱 Personal" },
+          { k: "hobbies", l: "🎸 Hobbies" },
           { k: "interpersonal", l: "🍻 Interpersonal" },
           { k: "home", l: "🏠 Home" },
           { k: "health", l: "💪 Physical Health" },
           { k: "mental", l: "❤️ Mental Health" },
+          { k: "cooking", l: "🍗 Cooking" },
+          { k: "admin", l: "🌱 Admin" },
         ];
         return `<div class="summary-table">${f
           .map(({ k, l }) => {
