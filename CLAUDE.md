@@ -34,5 +34,5 @@ Reflection/planning skills (`/retro-week`, `/plan-*`, `/recap-month`) live in `~
 ## Conventions
 
 - **`@layer` JSDoc annotation** on every source file: `@layer 1 - Integration (API-Specific)`, `@layer 2`, or `@layer 3`.
-- **Property/column lookups go through `pick()`** from `src/utils/property-lookup.js` (case-insensitive). Used by `NotionDatabase.extractProperty` and the CSV reader in `cli/plan-parse.js` so capitalization changes in Notion property names or CSV column headers don't break the pipeline.
+- **Property/column lookups go through `pick()`** from `src/utils/property-lookup.js` (case-insensitive). Used by `NotionDatabase.extractProperty` so capitalization changes in Notion property names don't break the pipeline.
 - **PRs only, never direct to main.** Branch off main, push, open with `gh pr create`, wait for merge. The vault is the only exception (not a git repo).

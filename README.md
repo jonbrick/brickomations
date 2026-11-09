@@ -590,7 +590,6 @@ yarn nyc            # Open NYC guide viewer (localhost:8787/nyc/)
 #### Other
 
 ```bash
-yarn plan           # Parse yarn plan data
 ```
 
 ### Claude Code Skills
