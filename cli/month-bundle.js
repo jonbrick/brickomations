@@ -215,7 +215,7 @@ function main() {
   }
 }
 
-module.exports = { buildMonthBundle, parseMonthArg, pad2 };
+module.exports = { buildMonthBundle, parseMonthArg, pad2, findMonthRecord, byMonth };
 
 if (require.main === module) {
   main();

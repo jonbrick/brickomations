@@ -3,11 +3,14 @@
  * @layer 1 - Integration (CLI)
  *
  * Retro bundle: emit one JSON object on stdout with all data /retro-week
- * needs for the given week. Read-only against data/*.json.
+ * needs for the given week — or, with --month, all data /recap-month needs
+ * for the given month. Read-only against data/*.json.
  *
  * Contract: ~/projects/brickocampus/personal/projects/doing/Build retro-week data bundler/bundle-shape.md
  *
- * Usage: yarn retro:bundle <wk>
+ * Usage: yarn --silent retro:bundle <wk>            (JSON on stdout)
+ *        yarn --silent retro:bundle --month <mm>    (too big to paste —
+ *          stages local/retro/month-bundle-<MM>.json, same as month:view)
  */
 
 const path = require("path");
@@ -22,6 +25,7 @@ const PLUMBING_KEYS = new Set([
 ]);
 
 const WEEKS_RELATION = "⏰ 2026 Weeks";
+const MONTHS_RELATION = "🗓️ 2026 Months";
 
 function strip(record) {
   if (!record || typeof record !== "object") return record;
@@ -83,7 +87,168 @@ function healthRowsForWeek(rows, fields, start, end) {
     .map((r) => Object.fromEntries(fields.map((f) => [f, r[f] ?? null])));
 }
 
+// Month mode (/recap-month). Same week-join model, sliced over the month's
+// related weeks. Causal window: prior recaps are months < mm only. Bias
+// isolation: the target month's My Recap is dropped unless its AI Recap is
+// already filled (a revisit reads it only to keep Jon's anchors intact).
+function buildMonthRetroBundle(mm) {
+  const { findMonthRecord, byMonth } = require("./month-bundle");
+  const plan = loadJson("plan.json");
+  const summaries = loadJson("summaries.json");
+  const retro = loadJson("retro.json");
+  const life = loadJson("life.json");
+  const journal = loadJson("journal.json");
+  const linearTeam = loadJson("linearTeam.json");
+
+  const monthRecord = findMonthRecord(plan, mm);
+  if (!monthRecord) throw new Error(`month not found in plan.json: ${mm}`);
+  const monthNotionId = monthRecord._notionId;
+
+  const weekIds = new Set(monthRecord[WEEKS_RELATION] || []);
+  const weeks = (plan.weeks || [])
+    .filter((w) => weekIds.has(w._notionId))
+    .sort((a, b) =>
+      String(a["Date Range (SET)"]).localeCompare(String(b["Date Range (SET)"]))
+    );
+  if (!weeks.length) throw new Error(`month "${monthRecord.Month}" has no related weeks`);
+  const start = weeks[0]["Date Range (SET)"];
+  const end = weeks[weeks.length - 1]["Date Range (SET) End"];
+
+  const forWeeks = (records) =>
+    (Array.isArray(records) ? records : []).filter(
+      (r) =>
+        Array.isArray(r[WEEKS_RELATION]) &&
+        r[WEEKS_RELATION].some((id) => weekIds.has(id))
+    );
+  const byDate = (key) => (a, b) => String(a[key]).localeCompare(String(b[key]));
+
+  const rocks = forWeeks(plan.rocks);
+  // Roll Up formulas duplicate their snapshot twins; the What-X snapshots
+  // duplicate the weekly retros already in the bundle.
+  const recapFor = (records) => {
+    const rec = byMonth(records, monthNotionId);
+    if (!rec) return null;
+    const out = strip(rec);
+    for (const k of Object.keys(out)) {
+      if (k.endsWith(" Roll Up") || /^(AI|My) What /.test(k) || k === MONTHS_RELATION) {
+        delete out[k];
+      }
+    }
+    if (!out["AI Recap"]) delete out["My Recap"];
+    return out;
+  };
+  // Weekly retros: the free-text columns + habits; block/task Roll Ups
+  // duplicate the weekly summaries.
+  const retroSlim = (r) =>
+    Object.fromEntries(
+      Object.entries(strip(r)).filter(
+        ([k]) => !k.endsWith(" Roll Up") || k === "Weekly Habits Roll Up"
+      )
+    );
+  const pick = (fields) => (r) =>
+    Object.fromEntries(fields.filter((f) => f in r).map((f) => [f, r[f]]));
+  const priorMonths = Array.from({ length: mm - 1 }, (_, i) =>
+    findMonthRecord(plan, i + 1)
+  ).filter(Boolean);
+  const priorAiRecaps = (records) =>
+    priorMonths
+      .map((m) => byMonth(records, m._notionId))
+      .filter((r) => r && r["AI Recap"])
+      .map((r) => ({ "Month Recap": r["Month Recap"], "AI Recap": r["AI Recap"] }));
+  const lastMonth = priorMonths[priorMonths.length - 1];
+  const lastMyRecap = (records) => {
+    const r = lastMonth ? byMonth(records, lastMonth._notionId) : null;
+    return r && r["My Recap"] ? { "Month Recap": r["Month Recap"], "My Recap": r["My Recap"] } : null;
+  };
+
+  return {
+    month: {
+      number: mm,
+      title: monthRecord.Month,
+      notionId: monthNotionId,
+      start,
+      end,
+      weeks: weeks.map((w) => ({
+        title: w.Week,
+        start: w["Date Range (SET)"],
+        end: w["Date Range (SET) End"],
+      })),
+    },
+    plans: {
+      personal: strip(byMonth(life.personalMonthlyPlans, monthNotionId)),
+      work: strip(byMonth(life.workMonthlyPlans, monthNotionId)),
+    },
+    rocks: {
+      personal: rocks.filter((r) => r.Category !== "💼 Work").map(strip),
+      work: rocks.filter((r) => r.Category === "💼 Work").map(strip),
+    },
+    events: forWeeks(plan.events)
+      .sort(byDate("Date"))
+      .map(pick(["Event Name", "Date", "Date End", "Status", "Category", "PERSONAL Category", "WORK Category", "Notes"])),
+    trips: forWeeks(plan.trips)
+      .sort(byDate("Date"))
+      .map(pick(["Trip Name", "Date", "Date End", "Status", "Category", "Subcategory", "Notes"])),
+    summaries: {
+      personal: forWeeks(summaries.personalWeekly).map(strip),
+      work: forWeeks(summaries.workWeekly).map(strip),
+    },
+    retros: {
+      personal: forWeeks(retro.personalWeekly).sort(byDate("Date")).map(retroSlim),
+      work: forWeeks(retro.workWeekly).sort(byDate("Date")).map(retroSlim),
+    },
+    recap: {
+      personal: recapFor(summaries.personalMonthlyRecap),
+      work: recapFor(summaries.workMonthlyRecap),
+    },
+    priorRecaps: {
+      personal: priorAiRecaps(summaries.personalMonthlyRecap),
+      work: priorAiRecaps(summaries.workMonthlyRecap),
+      lastMyRecap: {
+        personal: lastMyRecap(summaries.personalMonthlyRecap),
+        work: lastMyRecap(summaries.workMonthlyRecap),
+      },
+    },
+    tasks: (life.tasks || [])
+      .filter((t) => inRange(t["Due Date"], start, end))
+      .sort(byDate("Due Date"))
+      .map(pick(["Task", "Due Date", "Status", "Category", "PERSONAL Category", "WORK Category", "Description"])),
+    projectUpdates: Array.isArray(linearTeam.projectUpdates)
+      ? linearTeam.projectUpdates
+          .filter((u) => inRange(u.Date, start, end))
+          .sort((a, b) => a["Created At"].localeCompare(b["Created At"]))
+      : null,
+    journal: (journal.entries || []).filter((e) => inRange(e.date, start, end)),
+  };
+}
+
 function main() {
+  if (process.argv[2] === "--month") {
+    const mmArg = process.argv[3];
+    const mm = Number.parseInt(mmArg, 10);
+    if (!Number.isInteger(mm) || mm < 1 || mm > 12) {
+      process.stderr.write(
+        `usage: yarn retro:bundle --month <mm>  (mm must be an integer 1..12, got ${JSON.stringify(mmArg)})\n`
+      );
+      process.exit(1);
+    }
+    try {
+      const bundle = buildMonthRetroBundle(mm);
+      const rel = `local/retro/month-bundle-${String(mm).padStart(2, "0")}.json`;
+      const out = path.join(__dirname, "..", rel);
+      require("fs").mkdirSync(path.dirname(out), { recursive: true });
+      require("fs").writeFileSync(out, JSON.stringify(bundle, null, 2) + "\n");
+      process.stdout.write(
+        `[retro month bundle staged → ${rel}] ${bundle.month.title} · ${bundle.month.start} → ${bundle.month.end} · ` +
+          `${bundle.month.weeks.length} weeks · ${bundle.retros.personal.length}+${bundle.retros.work.length} retros · ` +
+          `${bundle.journal.length} journal · ${bundle.tasks.length} tasks\n`
+      );
+    } catch (err) {
+      process.stderr.write(`${err.message}\n`);
+      process.exit(1);
+    }
+    return;
+  }
+
   const wkArg = process.argv[2];
   const wk = Number.parseInt(wkArg, 10);
   if (!Number.isInteger(wk) || wk < 1 || wk > 53) {

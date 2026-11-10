@@ -117,6 +117,12 @@ cd ~/projects/brickomations && yarn retro:bundle <N>
                             # week N retro bundle (use --silent; pair with
                             # node scripts/retro-readiness.js <N> <N>)
 
+cd ~/projects/brickomations && yarn --silent retro:bundle --month <MM>
+                            # month MM recap bundle for /recap-month (weekly
+                            # retros + summaries, plans, rocks, events,
+                            # journal, recap record, prior AI Recaps); stages
+                            # local/retro/month-bundle-<MM>.json
+
 cd ~/projects/brickomations && yarn plan:bundle <N>
                             # week N planning bundle
 
