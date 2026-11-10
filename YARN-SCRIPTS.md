@@ -164,6 +164,15 @@ cd ~/projects/brickomations && yarn tokens:check
                             # yarn tokens:refresh)
 ```
 
+## Dev
+
+```
+cd ~/projects/brickomations && yarn test
+                            # unit tests — test/*.test.js, no framework,
+                            # sync or async cases. yarn test retry = only
+                            # cases whose name contains "retry". no prompts
+```
+
 ## Local data map (data/ = iCloud Brickography)
 
 ```
