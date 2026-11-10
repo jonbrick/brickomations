@@ -53,7 +53,10 @@ function weekNumber(title) {
   return m ? Number(m[1]) : null;
 }
 
+// _notionId kept on rocks, events, trips: /plan-month updates matches on a
+// re-run (rock edits / [DELETE] renames, event fixes) instead of twinning.
 const rockSlim = (r) => ({
+  _notionId: r._notionId,
   Rock: r.Rock,
   Category: r.Category,
   Status: r.Status,
@@ -121,11 +124,11 @@ function buildMonthBundle(mm) {
   const events = (plan.events || [])
     .filter((e) => inRange(String(e.Date || "").slice(0, 10), start, end))
     .sort((a, b) => String(a.Date).localeCompare(String(b.Date)))
-    .map(strip);
+    .map(stripKeepId);
   const trips = (plan.trips || [])
     .filter((t) => tripStart(t) && tripStart(t) <= end && tripEnd(t) >= start)
     .sort((a, b) => tripStart(a).localeCompare(tripStart(b)))
-    .map(strip);
+    .map(stripKeepId);
 
   return {
     generatedAt: new Date().toISOString(),
