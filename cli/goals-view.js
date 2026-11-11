@@ -25,7 +25,8 @@ const PROJECTS_RELATION_ON_TASK = "💎 2026 Projects";
 const GOALS_ROLLUP_ON_TASK = "🏆 2026 Goals";
 const EVENTS_RELATION_ON_GOAL = "🎟️ 2026 Events";
 const TRIPS_RELATION_ON_GOAL = "✈️ 2026 Trips";
-const THEMES_RELATION_ON_GOAL = "🏔️ 2026 Themes";
+const HIGH_LEVEL_GOALS_RELATION_ON_GOAL = "🏔️ 2026 High Level Goals";
+const GOAL_THEMES_RELATION_ON_GOAL = "🔗 2026 Goal Themes";
 
 const YEAR = 2026;
 const YEAR_END = `${YEAR}-12-31`;
@@ -126,7 +127,8 @@ function buildGoalsBundle() {
   const today = new Date().toLocaleDateString("en-CA");
 
   const goals = life.goals || [];
-  const themes = life.themes || [];
+  const highLevelGoals = life.highLevelGoals || [];
+  const goalThemeName = new Map((life.goalThemes || []).map((t) => [t._notionId, t.Theme]));
   const projects = life.personalProjects || [];
   const tasks = life.tasks || [];
   const eventsById = new Map((plan.events || []).map((e) => [e._notionId, e]));
@@ -180,7 +182,9 @@ function buildGoalsBundle() {
       closed: isClosed,
       pastDate: !isClosed && goalDate && goalDate < today,
       clarifying: g["Clarifying Statement"] || "",
-      themeIds: g[THEMES_RELATION_ON_GOAL] || [],
+      outcome: g.Outcome || "",
+      highLevelGoalIds: g[HIGH_LEVEL_GOALS_RELATION_ON_GOAL] || [],
+      goalThemes: (g[GOAL_THEMES_RELATION_ON_GOAL] || []).map((id) => goalThemeName.get(id)).filter(Boolean),
       projects: goalProjects.map((p) => ({
         _notionId: p._notionId,
         name: p.Project,
@@ -206,18 +210,18 @@ function buildGoalsBundle() {
     };
   });
 
-  // Themes carry their goals; a goal with no theme lands under "(no theme)".
-  const themeRows = themes.map((t) => ({
+  // High Level Goals carry their goals; a goal with none lands under "(no high level goal)".
+  const highLevelGoalRows = highLevelGoals.map((t) => ({
     _notionId: t._notionId,
     name: t.Name,
     category: t.Category,
     description: t.Description || "",
     goals: goalRows
-      .filter((g) => g.themeIds.includes(t._notionId))
+      .filter((g) => g.highLevelGoalIds.includes(t._notionId))
       .sort((a, b) => statusRank(a.status) - statusRank(b.status) || String(a.name).localeCompare(String(b.name))),
   }));
-  const themed = new Set(themeRows.flatMap((t) => t.goals.map((g) => g._notionId)));
-  const unthemed = goalRows.filter((g) => !themed.has(g._notionId));
+  const placed = new Set(highLevelGoalRows.flatMap((t) => t.goals.map((g) => g._notionId)));
+  const unplaced = goalRows.filter((g) => !placed.has(g._notionId));
 
   // Projects with no goal — valid (admin projects), but worth seeing beside the goals.
   const goalless = projects
@@ -248,8 +252,8 @@ function buildGoalsBundle() {
         .sort((a, b) => statusRank(a[0]) - statusRank(b[0])),
       pastDate: goalRows.filter((g) => g.pastDate).length,
     },
-    themes: themeRows,
-    unthemed,
+    highLevelGoals: highLevelGoalRows,
+    unplaced,
     goalless: goalless.map((p) => ({ _notionId: p._notionId, name: p.Project, status: p.Status, priority: p.Priority })),
     workProjects: workProjects.map((p) => ({ _notionId: p._notionId, name: p.Project, status: p.Status, priority: p.Priority, date: ymd(p.Date) || null })),
   };
@@ -278,6 +282,8 @@ function render(b) {
         : `${g.doneBy || "by"} ${g.goalDate ? pretty(g.goalDate) : "?"}${g.pastDate ? "  ⚠ PAST DATE" : ""}`;
     P(`  ${(g.status || "").padEnd(9)} ${g.name}   (${g.category || "?"} · ${when})`);
     for (const ln of wrap(g.clarifying, 86, I)) P(ln);
+    if (g.outcome) for (const ln of wrap(`so that ${g.outcome}`, 86, I)) P(ln);
+    if (g.goalThemes.length) P(`${I}themes     🔗 ${g.goalThemes.join(" · ")}`);
     if (g.closed) return; // Done / Next Year / Cancelled get the one line + statement
     if (g.projects.length) {
       P(`${I}projects`);
@@ -301,19 +307,19 @@ function render(b) {
     for (const s of g.signals) P(`${I}${s}`);
   };
 
-  for (const t of b.themes) {
+  for (const t of b.highLevelGoals) {
     P("");
     P(RULE);
     P(`🏔️  ${t.name}   (${t.category || "?"})`);
     for (const ln of wrap(t.description, 90, "    ")) P(ln);
-    if (!t.goals.length) P("    (no goals on this theme)");
+    if (!t.goals.length) P("    (no goals on this high level goal)");
     for (const g of t.goals) goalBlock(g);
   }
-  if (b.unthemed.length) {
+  if (b.unplaced.length) {
     P("");
     P(RULE);
-    P("🏔️  (no theme)");
-    for (const g of b.unthemed) goalBlock(g);
+    P("🏔️  (no high level goal)");
+    for (const g of b.unplaced) goalBlock(g);
   }
 
   P("");

@@ -31,9 +31,15 @@ const DATABASE_CONFIG = [
     parent: "year",
   },
   {
-    name: "{year} Themes",
+    name: "{year} High Level Goals",
     icon: "🏔️",
-    envVar: "NOTION_THEMES_DATABASE_ID",
+    envVar: "NOTION_HIGH_LEVEL_GOALS_DATABASE_ID",
+    parent: "year",
+  },
+  {
+    name: "{year} Goal Themes",
+    icon: "🔗",
+    envVar: "NOTION_GOAL_THEMES_DATABASE_ID",
     parent: "year",
   },
   {
@@ -282,15 +288,21 @@ const RELATION_CONFIG = [
     sourcePropertyName: "🎟️ {year} Events",
     targetPropertyName: "✈️ {year} Trips",
   },
-  // Goals relations (1 relation)
+  // Goals relations (2 relations)
   // No Goals↔Tasks relation: since 2026-07-11, a task's "🏆 {year} Goals" is a
   // rollup deriving from the Projects relation → the project's "🏆 Goal".
   // The Projects DB and that rollup are created manually, not by this generator.
   {
     sourceDb: "{year} Goals",
-    targetDb: "{year} Themes",
-    sourcePropertyName: "🏔️ {year} Themes",
-    targetPropertyName: "🏆 {year} Goals",
+    targetDb: "{year} High Level Goals",
+    sourcePropertyName: "🏔️ {year} High Level Goals",
+    targetPropertyName: "🌄 {year} Goals",
+  },
+  {
+    sourceDb: "{year} Goals",
+    targetDb: "{year} Goal Themes",
+    sourcePropertyName: "🔗 {year} Goal Themes",
+    targetPropertyName: "🌄 {year} Goals",
   },
   // Rocks relations (1 relation)
   {

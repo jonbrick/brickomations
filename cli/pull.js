@@ -41,7 +41,8 @@ const RETRO_DATABASES = {
 
 const LIFE_DATABASES = {
   goals: { envVar: "NOTION_GOALS_DATABASE_ID", label: "Goals" },
-  themes: { envVar: "NOTION_THEMES_DATABASE_ID", label: "Themes" },
+  highLevelGoals: { envVar: "NOTION_HIGH_LEVEL_GOALS_DATABASE_ID", label: "High Level Goals" },
+  goalThemes: { envVar: "NOTION_GOAL_THEMES_DATABASE_ID", label: "Goal Themes" },
   relationships: { envVar: "NOTION_RELATIONSHIPS_DATABASE_ID", label: "Relationships" },
   tasks: { envVar: "TASKS_DATABASE_ID", label: "Tasks" },
   habits: { envVar: "HABITS_WEEK_SUMMARY_DATABASE_ID", label: "Habits" },
