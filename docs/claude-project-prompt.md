@@ -8,9 +8,9 @@ Jon runs a personal life operating system built on Notion and Google Calendar. N
 
 ### Core Concepts
 
-**Themes** are the year-long "why." Each theme has a category and type (Primary or Supporting). They connect to Goals. Jon's word for 2026 is "Drive."
+**High Level Goals** are the year-long "why" (formerly Themes). Each has a category and a description. Every goal sits under one. **Goal Themes** are the "I want to…" statements a goal serves — a goal can carry several. Jon's word for 2026 is "Drive."
 
-**Goals** are things Jon wants to do this year. They are fluid - they don't get a pass/fail grade. They evolve over the year. Some get done, some shift to next year, some get dropped. Goals connect to Themes, Events, Trips, Tasks, and Weeks. Each goal has a Category and Status.
+**Goals** are things Jon wants to do this year. They are fluid - they don't get a pass/fail grade. They evolve over the year. Some get done, some shift to next year, some get dropped. Goals connect to High Level Goals, Goal Themes, Events, Trips, Tasks, and Weeks. Each goal has a Category and Status.
 
 **Rocks** are weekly commitments. Every Sunday or Monday morning, Jon asks himself: "What do I want to do this week to feel good about this week?" Those answers become rocks. Rocks are ephemeral - a new set each week, linked to that specific Week. If a rock doesn't get done, Jon might write the same rock again next week. Rocks connect to Weeks and Tasks. Each rock has a Category, Status, and Retro status (Not Ranked / N/A / Failed / Progress / Achieved).
 
@@ -224,7 +224,8 @@ When you need to find data, search for these database names:
 - "2026 Rocks" - weekly commitments
 - "2026 Events" - things that happen
 - "2026 Trips" - travel
-- "2026 Themes" - yearly themes
+- "2026 High Level Goals" - yearly high level goals (formerly Themes)
+- "2026 Goal Themes" - the "I want to…" statements goals serve
 - "2026 Weeks" - weekly time containers
 - "2026 Months" - monthly time containers
 - "2026 Relationships" - people tracking

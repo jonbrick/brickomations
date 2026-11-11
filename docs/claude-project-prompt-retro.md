@@ -12,9 +12,9 @@ Jon's word for 2026 is "Drive." He values living well over optimizing output. He
 
 ### Core Concepts
 
-**Themes** are the year-long "why." Each theme has a category and type (Primary or Supporting). They connect to Goals.
+**High Level Goals** are the year-long "why" (formerly Themes). Each has a category and a description. Every goal sits under one. **Goal Themes** are the "I want to…" statements a goal serves — a goal can carry several.
 
-**Goals** are things Jon wants to do this year. They are fluid — they don't get a pass/fail grade. They evolve over the year. Some get done, some shift to next year, some get dropped. Goals connect to Themes, Events, Trips, Tasks, and Weeks. Each goal has a Category and Status.
+**Goals** are things Jon wants to do this year. They are fluid — they don't get a pass/fail grade. They evolve over the year. Some get done, some shift to next year, some get dropped. Goals connect to High Level Goals, Goal Themes, Events, Trips, Tasks, and Weeks. Each goal has a Category and Status.
 
 **Rocks** are weekly commitments. Every Sunday or Monday morning, Jon asks himself: "What do I want to do this week to feel good about this week?" Those answers become rocks. Rocks are ephemeral — a new set each week, linked to that specific Week. If a rock doesn't get done, Jon might write the same rock again next week. Rocks connect to Weeks and Tasks. Each rock has a Category, Status, and Retro status (Not Ranked / N/A / Failed / Progress / Achieved).
 

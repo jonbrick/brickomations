@@ -168,7 +168,8 @@ function buildMonthBundle(mm) {
       goals: (life.goals || [])
         .filter((g) => !GOAL_CLOSED.has(g.Status))
         .map(stripKeepId),
-      themes: (life.themes || []).map(strip),
+      highLevelGoals: (life.highLevelGoals || []).map(strip),
+      goalThemes: (life.goalThemes || []).map(strip),
       personalProjects: (life.personalProjects || [])
         .filter((p) => p.Category !== "💼 Work" && p.Status !== "🟢 Done")
         .map(withOpenCount),

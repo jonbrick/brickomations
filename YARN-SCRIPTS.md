@@ -103,7 +103,7 @@ cd ~/projects/brickomations && yarn push --auto
                             # no prompts
 
 cd ~/projects/brickomations && yarn vault-sync
-                            # Notion → markdown mirrors: retros/goals/themes
+                            # Notion → markdown mirrors: retros/goals/high-level-goals/goal-themes
                             # into the vault's personal/; personal projects
                             # (frontmatter + page body) into
                             # brickography/projects/<todo|doing|done>/.
@@ -139,7 +139,7 @@ cd ~/projects/brickomations && yarn --silent month:view <MM>
                             # <MM> emits the JSON alone
 
 cd ~/projects/brickomations && yarn --silent goals:view
-                            # every 2026 goal by theme — status, date,
+                            # every 2026 goal by high level goal — status, date,
                             # statement, linked projects/tasks/events, and
                             # the number the data holds (weight, BP, reading,
                             # cooking); stages local/plan/goals-bundle.json

@@ -3,7 +3,7 @@
 /**
  * Vault Sync CLI
  * Syncs personal planning data from data/*.json to markdown mirrors:
- *   retros / goals / themes → the Brickocampus vault's personal/
+ *   retros / goals / high-level-goals / goal-themes → the Brickocampus vault's personal/
  *   personal projects       → <brickography>/projects/<todo|doing|done>/
  * (brickography root = the folder the data/ symlink points into).
  * Zero AI tokens — pure JS transformation with hash-based diff detection.
@@ -73,7 +73,7 @@ function slugify(title) {
 /**
  * Read a record's title value via the collector-supplied `_titleKey`, so the
  * sync follows Notion's title column no matter what it's renamed to
- * (e.g. Goals "Goal" → "Name", Themes "Epic" → "Name"). pull.js tags
+ * (e.g. Goals "Goal" → "Name", High Level Goals "Epic" → "Name"). pull.js tags
  * `_titleKey` with whichever property has type "title". Returns "" if absent.
  */
 function titleOf(record) {
@@ -250,7 +250,7 @@ function transformRetro(record) {
   return { slug: `week-${weekPadded}`, markdown };
 }
 
-function transformGoal(record, themeLookup) {
+function transformGoal(record, highLevelGoalLookup, goalThemeLookup) {
   const rawTitle = titleOf(record);
   const cleanTitle = rawTitle
     .replace(/^\?\?\?\s*/, "")
@@ -258,11 +258,13 @@ function transformGoal(record, themeLookup) {
     .trim();
   const slug = slugify(rawTitle);
 
-  const themeIds = record["🏔️ 2026 Themes"] || [];
-  const themeLinks = themeIds
-    .map((id) => themeLookup[id])
-    .filter(Boolean)
-    .map((s) => `"[[${s}]]"`);
+  const links = (ids, lookup) =>
+    (ids || [])
+      .map((id) => lookup[id])
+      .filter(Boolean)
+      .map((s) => `"[[${s}]]"`);
+  const highLevelGoalLinks = links(record["🏔️ 2026 High Level Goals"], highLevelGoalLookup);
+  const goalThemeLinks = links(record["🔗 2026 Goal Themes"], goalThemeLookup);
 
   const lines = [
     "---",
@@ -270,8 +272,11 @@ function transformGoal(record, themeLookup) {
     "type: goal",
     `status: "${stripEmoji(record["Status"] || "")}"`,
     `category: "${stripEmoji(record["Category"] || "")}"`,
+    record["PERSONAL Category"] ? `personal_category: "${stripEmoji(record["PERSONAL Category"])}"` : null,
+    record["WORK Category"] ? `work_category: "${stripEmoji(record["WORK Category"])}"` : null,
     `goal_type: ${record["Goal Type"] || "Primary"}`,
-    `themes: [${themeLinks.join(", ")}]`,
+    `high_level_goals: [${highLevelGoalLinks.join(", ")}]`,
+    `goal_themes: [${goalThemeLinks.join(", ")}]`,
     record["Date"] ? `date: ${record["Date"]}` : null,
     record["Month"] ? `month: "${record["Month"]}"` : null,
     `notion_id: "${record._notionId}"`,
@@ -287,17 +292,20 @@ function transformGoal(record, themeLookup) {
       `## Clarifying Statement\n${record["Clarifying Statement"]}`
     );
   }
+  if (record["Outcome"]) {
+    sections.push(`## Outcome\n${record["Outcome"]}`);
+  }
 
   const markdown =
     frontmatter + "\n\n" + (sections.length ? sections.join("\n\n") + "\n" : "");
   return { slug, markdown };
 }
 
-function transformTheme(record, goalLookup) {
+function transformHighLevelGoal(record, goalLookup) {
   const title = titleOf(record);
   const slug = slugify(title);
 
-  const goalIds = record["🏆 2026 Goals"] || [];
+  const goalIds = record["🌄 2026 Goals"] || [];
   const goalLinks = goalIds
     .map((id) => goalLookup[id])
     .filter(Boolean)
@@ -306,9 +314,8 @@ function transformTheme(record, goalLookup) {
   const frontmatter = [
     "---",
     `aliases: ["${yamlEscape(title)}"]`,
-    "type: theme",
+    "type: high-level-goal",
     `category: "${stripEmoji(record["Category"] || "")}"`,
-    `theme_type: ${record["Theme Type"] || "Primary"}`,
     `notion_id: "${record._notionId}"`,
     'sync_hash: ""',
     "---",
@@ -354,20 +361,44 @@ function syncRetros(records) {
   return results;
 }
 
-function syncGoals(goals, themes) {
+// Goal Themes: title + backlinked goals, nothing else.
+function transformGoalTheme(record, goalLookup) {
+  const title = titleOf(record);
+  const slug = slugify(title);
+
+  const goalLinks = (record["🌄 2026 Goals"] || [])
+    .map((id) => goalLookup[id])
+    .filter(Boolean)
+    .map((s) => `- [[${s}]]`);
+
+  const frontmatter = [
+    "---",
+    `aliases: ["${yamlEscape(title)}"]`,
+    "type: goal-theme",
+    `notion_id: "${record._notionId}"`,
+    'sync_hash: ""',
+    "---",
+  ].join("\n");
+
+  const markdown =
+    frontmatter + "\n\n" + (goalLinks.length ? `## Goals\n${goalLinks.join("\n")}\n` : "");
+  return { slug, markdown };
+}
+
+function syncGoals(goals, highLevelGoals, goalThemes) {
   const dir = path.join(VAULT_DIR, "goals");
   ensureDir(dir);
   const results = { written: 0, skipped: 0, errors: [] };
 
-  const themeLookup = {};
-  for (const theme of themes) {
-    themeLookup[theme._notionId] = slugify(titleOf(theme));
-  }
+  const slugLookup = (records) =>
+    Object.fromEntries(records.map((r) => [r._notionId, slugify(titleOf(r))]));
+  const highLevelGoalLookup = slugLookup(highLevelGoals);
+  const goalThemeLookup = slugLookup(goalThemes);
 
   const seenSlugs = new Set();
   for (const record of goals) {
     try {
-      let { slug, markdown } = transformGoal(record, themeLookup);
+      let { slug, markdown } = transformGoal(record, highLevelGoalLookup, goalThemeLookup);
       if (seenSlugs.has(slug)) {
         slug = `${slug}-${record._notionId.slice(0, 8)}`;
         markdown = markdown.replace(
@@ -391,8 +422,10 @@ function syncGoals(goals, themes) {
   return results;
 }
 
-function syncThemes(themes, goals) {
-  const dir = path.join(VAULT_DIR, "themes");
+// High Level Goals and Goal Themes mirror the same way: one file per row,
+// goals listed from the row's back-relation.
+function syncGoalParents(records, goals, folder, transform) {
+  const dir = path.join(VAULT_DIR, folder);
   ensureDir(dir);
   const results = { written: 0, skipped: 0, errors: [] };
 
@@ -401,9 +434,9 @@ function syncThemes(themes, goals) {
     goalLookup[goal._notionId] = slugify(titleOf(goal));
   }
 
-  for (const record of themes) {
+  for (const record of records) {
     try {
-      const { slug, markdown } = transformTheme(record, goalLookup);
+      const { slug, markdown } = transform(record, goalLookup);
       const filePath = path.join(dir, `${slug}.md`);
       if (writeIfChanged(filePath, markdown)) {
         results.written++;
@@ -560,13 +593,19 @@ function pruneOrphans({ retroData, lifeData, dryRun }) {
     goals: new Map(
       (lifeData?.goals || []).map((g) => [
         g._notionId,
-        transformGoal(g, {}).slug,
+        transformGoal(g, {}, {}).slug,
       ])
     ),
-    themes: new Map(
-      (lifeData?.themes || []).map((t) => [
+    "high-level-goals": new Map(
+      (lifeData?.highLevelGoals || []).map((t) => [
         t._notionId,
-        transformTheme(t, {}).slug,
+        transformHighLevelGoal(t, {}).slug,
+      ])
+    ),
+    "goal-themes": new Map(
+      (lifeData?.goalThemes || []).map((t) => [
+        t._notionId,
+        transformGoalTheme(t, {}).slug,
       ])
     ),
     retros: new Map(
@@ -673,8 +712,9 @@ async function main() {
     );
   }
 
-  if (lifeData?.goals && lifeData?.themes) {
-    const goalResults = syncGoals(lifeData.goals, lifeData.themes);
+  if (lifeData?.goals && lifeData?.highLevelGoals) {
+    const goalThemes = lifeData.goalThemes || [];
+    const goalResults = syncGoals(lifeData.goals, lifeData.highLevelGoals, goalThemes);
     allResults.push({ name: "Goals", ...goalResults });
     console.log(
       `Goals: ${goalResults.written} written, ${goalResults.skipped} unchanged` +
@@ -683,14 +723,18 @@ async function main() {
           : "")
     );
 
-    const themeResults = syncThemes(lifeData.themes, lifeData.goals);
-    allResults.push({ name: "Themes", ...themeResults });
-    console.log(
-      `Themes: ${themeResults.written} written, ${themeResults.skipped} unchanged` +
-        (themeResults.errors.length
-          ? `, ${themeResults.errors.length} errors`
-          : "")
-    );
+    const parents = [
+      ["High Level Goals", lifeData.highLevelGoals, "high-level-goals", transformHighLevelGoal],
+      ["Goal Themes", goalThemes, "goal-themes", transformGoalTheme],
+    ];
+    for (const [name, records, folder, transform] of parents) {
+      const r = syncGoalParents(records, lifeData.goals, folder, transform);
+      allResults.push({ name, ...r });
+      console.log(
+        `${name}: ${r.written} written, ${r.skipped} unchanged` +
+          (r.errors.length ? `, ${r.errors.length} errors` : "")
+      );
+    }
   }
 
   if (lifeData?.personalProjects) {

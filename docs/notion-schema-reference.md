@@ -2,28 +2,41 @@
 
 This document contains the exact property names, types, and allowed values for every Notion database in Jon's Life OS. Use these property names exactly when querying or creating pages.
 
-## 2026 Themes
+## 2026 High Level Goals
+
+Formerly "2026 Themes" (renamed 2026-11-11).
 
 | Property | Type | Values |
 |----------|------|--------|
-| Epic | title | |
-| Category | select | "💼 Work", "🌱 Personal", "🍻 Interpersonal", "🏃 Physical", "❤️ Menta/Emotional", "🏠 Home" |
-| Theme Type | select | "Primary", "Supporting" |
+| Name | title | |
+| Category | select | "💼 Work", "🌱 Personal", "🍻 Interpersonal", "🏃 Physical", "❤️ Mental/Emotional", "🏠 Home" |
 | Description | text | |
-| 🏆 2026 Goals | relation | → Goals database |
+| 🌄 2026 Goals | relation | → Goals database |
+
+## 2026 Goal Themes
+
+| Property | Type | Values |
+|----------|------|--------|
+| Theme | title | |
+| 🌄 2026 Goals | relation | → Goals database |
 
 ## 2026 Goals
 
 | Property | Type | Values |
 |----------|------|--------|
-| Goal | title | |
-| Status | status | "🧊 Ice Box", "⏸️ Blocked", "🟣 Considering", "🔴 To Do", "🟠 To Book", "🟡 Scheduled", "🔵 Doing", "🟢 Done", "↗️ Next Year" |
-| Category | select | "💼 Work", "🌱 Personal", "🍻 Interpersonal", "🏠 Home", "🏃‍♂️ Physical Health", "❤️ Mental Health" |
-| Goal Type | select | "Primary", "Supporting" |
-| Clarifying Statement | text | |
-| Date | date | |
+| Name | title | |
+| Status | status | "🧊 Ice Box", "⏸️ Blocked", "🟣 Considering", "🔴 To Do", "🟠 To Book", "🟡 Scheduled", "🔵 Doing", "🟢 Done", "↗️ Next Year", "❌ Cancelled" |
+| Category | select | "💼 Work", "🌱 Personal" |
+| PERSONAL Category | select | "🎸 Hobbies", "🍻 Interpersonal", "🏠 Home", "💪 Physical Health", "❤️ Mental Health", "🍗 Cooking", "🌱 Admin" |
+| WORK Category | select | "🎨 Design", "🖥️ Coding", "💡 Exploration", "⚠️ Critique", "🔎 QA", "🤝 Hiring & Team", "💼 Admin" |
+| Clarifying Statement | text | What done looks like |
+| Outcome | text | The "so that" — read with Clarifying Statement via the `Goal Statement` formula |
+| Goal Date | date | |
+| Achieved Date | date | |
 | Calendar Created | checkbox | |
-| 🏔️ 2026 Themes | relation | → Themes database (single) |
+| 🏔️ 2026 High Level Goals | relation | → High Level Goals database (single) |
+| 🔗 2026 Goal Themes | relation | → Goal Themes database |
+| 🔁 2026 Habits | relation | → Habits database |
 | ⏰ 2026 Weeks | relation | → Weeks database |
 | 🔨 2026 Projects | relation | → Projects database |
 | 🎟️ 2026 Events | relation | → Events database |

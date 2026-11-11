@@ -39,7 +39,8 @@ const RETRO_CONFIG_KEYS = {
 
 const LIFE_CONFIG_KEYS = {
   goals: "goals",
-  themes: "themes",
+  highLevelGoals: "highLevelGoals",
+  goalThemes: "goalThemes",
   relationships: "relationships",
   tasks: "tasks",
   habits: "personalHabits",

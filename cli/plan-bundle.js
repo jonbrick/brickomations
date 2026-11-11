@@ -525,7 +525,8 @@ function buildBundle(wk) {
                 : null,
           }
         : null,
-      themes: (life.themes || []).map(strip),
+      highLevelGoals: (life.highLevelGoals || []).map(strip),
+      goalThemes: (life.goalThemes || []).map(strip),
     },
   };
 

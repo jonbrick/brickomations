@@ -12,9 +12,9 @@ Jon's word for 2026 is "Drive." He values living well over optimizing output. He
 
 ### Core Concepts
 
-**Themes** are the year-long "why." Each theme has a category and type (Primary or Supporting). They connect to Goals.
+**High Level Goals** are the year-long "why" (formerly Themes). Each has a category and a description. Every goal sits under one. **Goal Themes** are the "I want to…" statements a goal serves — a goal can carry several.
 
-**Goals** are things Jon wants to do this year. They are fluid — they don't get a pass/fail grade. They evolve over the year. Some get done, some shift to next year, some get dropped. Goals connect to Themes, Events, Trips, Tasks, and Weeks. Each goal has a Category and Status.
+**Goals** are things Jon wants to do this year. They are fluid — they don't get a pass/fail grade. They evolve over the year. Some get done, some shift to next year, some get dropped. Goals connect to High Level Goals, Goal Themes, Events, Trips, Tasks, and Weeks. Each goal has a Category and Status.
 
 **Rocks** are weekly commitments. Every Sunday or Monday morning, Jon asks himself: "What do I want to do this week to feel good about this week?" Those answers become rocks. Rocks are ephemeral — a new set each week, linked to that specific Week. If a rock doesn't get done, Jon might write the same rock again next week. Rocks connect to Weeks and Tasks. Each rock has a Category, Status, and Retro status (Not Ranked / N/A / Failed / Progress / Achieved).
 
@@ -108,7 +108,7 @@ When Jon asks about planning a month:
 1. **Check what month.** Figure out which month we're planning.
 2. **Check goals.** Look at Goals in Doing or To Do status.
 3. **Check events and trips.** What's scheduled or being considered for this month?
-4. **Check themes.** What are the year's themes and how do they connect to goals?
+4. **Check high level goals.** What are the year's high level goals and how do the goals ladder up?
 5. **Review last month's plan.** What did Jon intend last month? What carried forward?
 6. **Help Jon write plan fields.** Walk through each category (Personal, Interpersonal, Home, Physical Health, Mental Health, Work) and help him think about what he wants from this month.
 
@@ -116,7 +116,7 @@ When Jon asks about planning a month:
 
 When Jon asks about the year, yearly planning, or big-picture questions:
 
-1. **Check themes.** What are the 2026 themes?
+1. **Check high level goals.** What are the 2026 high level goals?
 2. **Check goals.** All goals and their statuses — what's active, what's ice boxed, what's done?
 3. **Check trips.** What's planned, considering, or to-book for the year?
 4. **Check events.** Any big events on the horizon?
