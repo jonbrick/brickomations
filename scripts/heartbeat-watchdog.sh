@@ -12,13 +12,15 @@
 #
 # Schedule (keep in sync with _automation/_automation-readme.md Schedule table):
 #   brickomations-daily-brief        — 5:50 AM
-#   pull-linear                 — 6:30 AM
+#   pull-linear                 — 5:20 AM + 9:00 PM (the full pull inside the
+#                                 morning / evening yarn sync tiers)
 #   app-launcher                — no schedule: ensure-apps-running.sh runs from this
 #                                 script whenever Claude Desktop or Obsidian has no
 #                                 main process in the awake window (ensure_apps_running
 #                                 below); its failed ping (an app didn't open, or
 #                                 Obsidian never loaded) is surfaced here
-#   yarn-sync                   — every 2 hr, 7 AM–11 PM (7, 9, 11 AM, 1, 3, 5, 7, 9, 11 PM)
+#   yarn-sync                   — every tier pings it: morning 5:20 AM, hourly every
+#                                 2 hr 7 AM–11 PM, evening 9 PM
 #   cowork-morning-brief        — 6 AM
 #   cowork-evening-processor    — 9:20 PM (after the 9:15 PM evening render)
 #   granola-sync                — every 30 min while Obsidian is open (pull-based;
@@ -265,7 +267,7 @@ check_unscheduled_ping() {
 VAULT_DIR="${BRICKOCAMPUS_DIR:-$HOME/projects/brickocampus}"
 GRANOLA_PLUGIN_DIR="$VAULT_DIR/.obsidian/plugins/granola-sync"
 GRANOLA_STATE_JS="$REPO_ROOT/scripts/granola-state.js"
-GRANOLA_WINDOW_START="07:00"   # local time — the mini wakes 05:45; first cycle lands by ~06:30
+GRANOLA_WINDOW_START="07:00"   # local time — the mini wakes 05:15; first cycle lands by ~06:00
 GRANOLA_WINDOW_END="23:00"     # caffeinate releases 23:30
 GRANOLA_LIVENESS_SEC=7200      # 4 missed 30-min cycles
 GRANOLA_PROGRESS_SEC=$((4 * 86400))
@@ -387,7 +389,7 @@ check_granola_sync() {
 # relaunching, for deliberately closing the apps; the granola-sync alert says
 # when it's set.
 # ---------------------------------------------------------------------------
-APPS_WINDOW_START="05:45"   # mini wakes 05:45; Claude must be up for Cowork at 06:00
+APPS_WINDOW_START="05:15"   # mini wakes 05:15; Claude must be up for Cowork at 06:00
 APPS_WINDOW_END="23:00"     # caffeinate releases 23:30; nothing needs the apps after
 APPS_HOLD_FILE="$REPO_ROOT/local/apps-hold"
 ENSURE_APPS_SH="$REPO_ROOT/scripts/ensure-apps-running.sh"
@@ -430,10 +432,12 @@ ensure_apps_running
 
 check_job "brickomations-daily-brief" "05:50" 600
 
-check_job "pull-linear" "06:30" 900
+# The full Linear pull is a step inside the heavy sync tiers, after the
+# day's full calendar resync — 25-min grace covers a slow resync ahead of it.
+check_job "pull-linear" "05:20 21:00" 1500
 
 check_job "yarn-sync" \
-  "07:00 09:00 11:00 13:00 15:00 17:00 19:00 21:00 23:00" \
+  "05:20 07:00 09:00 11:00 13:00 15:00 17:00 19:00 21:00 23:00" \
   900
 
 check_job "cowork-morning-brief" "06:00" 1800
