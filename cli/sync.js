@@ -2,13 +2,20 @@
 
 /**
  * Sync CLI
- * Runs the full Brickomations pipeline: tokens:refresh → collect → update → summarize → aggregate → linear → pull → vault-sync
- * Called by launchd or manually via `yarn sync`
+ * Runs the Brickomations pipeline: tokens:refresh → collect → update → summarize → aggregate → linear → pull → vault-sync
+ * Called by launchd (one job per tier) or manually via `yarn sync`
+ *
+ * Tiers (--tier=…; launchd always passes one):
+ *   morning   heavy — every step, full Linear pull (tasks + projects + team cache, own heartbeat). 5:20 AM
+ *   evening   heavy — same steps as morning. 9:00 PM, done before the 9:15 PM evening render
+ *   hourly    light — tokens → collect → update → linear tasks-only → pull → granola-logs. Every 2 hours
+ *   (none)    every step with Linear tasks-only — manual runs and backfills
  *
  * Usage:
  *   yarn sync                                       # Run full pipeline for today (interactive where applicable)
- *   yarn sync --auto                                # Non-interactive (used by launchd) — default ±3 day window
- *   yarn sync --auto --dry-run                      # Print the steps and their commands; runs nothing
+ *   yarn sync --auto                                # Non-interactive — default ±3 day window
+ *   yarn sync:morning | sync:evening | sync:hourly  # One tier (launchd adds --auto)
+ *   yarn sync --auto --tier=hourly --dry-run        # Print a tier's steps and their commands; runs nothing
  *   yarn sync --date=YYYY-MM-DD                     # Backfill a single past day end-to-end
  *   yarn sync --from=YYYY-MM-DD --to=YYYY-MM-DD     # Backfill a date range; summarize/aggregate fire once per unique week/month touched
  *
@@ -27,6 +34,14 @@ const { parseDateRangeFromArgv, dateRangeFlags, defaultAutoRange } = require("..
 
 const autoMode = process.argv.includes("--auto");
 const dryRun = process.argv.includes("--dry-run");
+
+const TIERS = ["morning", "evening", "hourly"];
+const tierArg = process.argv.find((a) => a.startsWith("--tier="));
+const tier = tierArg ? tierArg.slice("--tier=".length) : null;
+if (tier !== null && !TIERS.includes(tier)) {
+  console.error(`Invalid --tier value: "${tier}". Expected one of: ${TIERS.join(", ")}.`);
+  process.exit(1);
+}
 
 const { range: explicitRange, error: rangeError } = parseDateRangeFromArgv(process.argv);
 if (rangeError) {
@@ -64,40 +79,61 @@ const rangeFlag = dateRangeFlags(range);
 // edits data/*.json between automated runs, so an auto push could only ever
 // clobber Notion (the source of truth) with stale local state. `yarn push` is
 // manual + push-skill invoked only. See harden-brickomations-sync-layer-brief §4a.4.
-const STEPS = [
-  { name: "tokens:refresh", cmd: `${NODE} cli/tokens/refresh.js --auto` },
-  { name: "collect", cmd: `${NODE} cli/collect-data.js --auto${rangeFlag}` },
-  // Events/Trips sync their full DB every run (syncEntireDb); give this step
-  // headroom over the 3-min default. 6 min was breached on 2026-08-12 once the
-  // Events DB reached 207 events (~340s of unconditional re-writes) — see the
-  // change-detection fast path in workflows/notion-databases-to-calendar.js,
-  // which is the actual fix. This margin stays as a backstop for the daily
-  // full-resync run, which still writes everything.
-  { name: "update", cmd: `${NODE} cli/update-calendar.js --auto${rangeFlag}`, timeout: 9 * 60 * 1000 },
-  { name: "summarize", cmd: `${NODE} cli/summarize-week.js --auto${rangeFlag}` },
-  { name: "aggregate", cmd: `${NODE} cli/aggregate-month.js --auto${rangeFlag}` },
-  // Assigned Linear issues → Notion 2026 Tasks, so a ticket closed at 2 PM
-  // reaches Notion by the next run instead of the 6:30 AM pull:linear. Runs
-  // before `pull` so the same run brings the change down to data/life.json.
-  // --tasks-only on its default 21-day window: no projects, no team cache, no
-  // heartbeat ping (the 6:30 AM job's heartbeat still attests Linear). Deliberately
-  // no ${rangeFlag}. `soft`: a Linear failure is logged and the run moves on —
-  // it doesn't fail this run or its heartbeat, so a Linear outage can't stale
-  // or alarm the Notion/Calendar side. 4-min step timeout sits just above
-  // pull-linear's own 3-min wall-clock cap, so its clearer message wins the race.
-  { name: "linear", cmd: `${NODE} cli/pull-linear.js --tasks-only`, soft: true, timeout: 4 * 60 * 1000 },
-  { name: "pull", cmd: `${NODE} cli/pull.js --auto`, timeout: 8 * 60 * 1000 },
-  { name: "vault-sync", cmd: `${NODE} cli/vault-sync.js --auto` },
-  // Trash every Granola Sync debug log but the newest — the watchdog reads only
-  // that one, and the rest sync to every device via the vault's iCloud container.
-  { name: "granola-logs", cmd: `${NODE} cli/rotate-granola-logs.js --auto` },
-  // Deliberately no ${rangeFlag}: Daily Records doesn't backfill. The step's
-  // own --auto window is fixed at yesterday→tomorrow (missing notes skip), so
-  // the sync-wide 3-week window can't create rows for days whose notes only
-  // exist because they always have. Runs after `pull` so plan.json is fresh
-  // for the week relation.
-  { name: "daily-records", cmd: `${NODE} cli/daily-records.js --auto` },
-];
+//
+// Tiers: `heavy` steps run only in the morning/evening tiers (and untiered
+// runs) — the rollups, mirrors and records nothing reads mid-day. The plan
+// skills run `yarn pull --auto && yarn vault-sync` themselves before reading,
+// so vault-sync lagging a few hours costs nothing. Every other step runs in
+// every tier.
+function buildSteps(tier, rangeFlag, node = NODE) {
+  const heavyTier = tier === "morning" || tier === "evening";
+  const all = [
+    { name: "tokens:refresh", cmd: `${node} cli/tokens/refresh.js --auto` },
+    { name: "collect", cmd: `${node} cli/collect-data.js --auto${rangeFlag}` },
+    // Events/Trips sync their full DB every run (syncEntireDb); give this step
+    // headroom over the 3-min default. 6 min was breached on 2026-08-12 once the
+    // Events DB reached 207 events (~340s of unconditional re-writes) — see the
+    // change-detection fast path in workflows/notion-databases-to-calendar.js,
+    // which is the actual fix. This margin stays as a backstop for the daily
+    // full-resync run, which still writes everything. The full resync itself is
+    // keyed off local/last-full-resync (first run of the day), which is now the
+    // 5:20 AM morning tier; later runs take the unchanged-records fast path.
+    { name: "update", cmd: `${node} cli/update-calendar.js --auto${rangeFlag}`, timeout: 9 * 60 * 1000 },
+    { name: "summarize", cmd: `${node} cli/summarize-week.js --auto${rangeFlag}`, heavy: true },
+    { name: "aggregate", cmd: `${node} cli/aggregate-month.js --auto${rangeFlag}`, heavy: true },
+    // Assigned Linear issues → Notion 2026 Tasks, so a ticket closed at 2 PM
+    // reaches Notion by the next run. Runs before `pull` so the same run brings
+    // the change down to data/life.json. Deliberately no ${rangeFlag} — the
+    // default 21-day settled window. Morning/evening run the full pull (tasks +
+    // projects + data/linearTeam.json) and it pings the pull-linear heartbeat
+    // itself; every other run is --tasks-only, which never pings. `soft`: a
+    // Linear failure is logged and the run moves on — it doesn't fail this run
+    // or the yarn-sync heartbeat, so a Linear outage can't stale or alarm the
+    // Notion/Calendar side (a failed full pull still alerts via pull-linear).
+    // 4-min step timeout sits just above pull-linear's own 3-min wall-clock cap,
+    // so its clearer message wins the race.
+    {
+      name: "linear",
+      cmd: heavyTier ? `${node} cli/pull-linear.js` : `${node} cli/pull-linear.js --tasks-only`,
+      soft: true,
+      timeout: 4 * 60 * 1000,
+    },
+    { name: "pull", cmd: `${node} cli/pull.js --auto`, timeout: 8 * 60 * 1000 },
+    { name: "vault-sync", cmd: `${node} cli/vault-sync.js --auto`, heavy: true },
+    // Trash every Granola Sync debug log but the newest — the watchdog reads only
+    // that one, and the rest sync to every device via the vault's iCloud container.
+    { name: "granola-logs", cmd: `${node} cli/rotate-granola-logs.js --auto` },
+    // Deliberately no ${rangeFlag}: Daily Records doesn't backfill. The step's
+    // own --auto window is fixed at yesterday→tomorrow (missing notes skip), so
+    // the sync-wide 3-week window can't create rows for days whose notes only
+    // exist because they always have. Runs after `pull` so plan.json is fresh
+    // for the week relation.
+    { name: "daily-records", cmd: `${node} cli/daily-records.js --auto`, heavy: true },
+  ];
+  return tier === "hourly" ? all.filter((s) => !s.heavy) : all;
+}
+
+const STEPS = buildSteps(tier, rangeFlag);
 
 function log(message) {
   const line = message + "\n";
@@ -212,7 +248,7 @@ function releaseLock() {
 }
 
 function printDryRun() {
-  console.log(`[dry-run] ${STEPS.length} steps, nothing run (no lock, no log, no heartbeat):`);
+  console.log(`[dry-run] tier ${tier || "none (full)"} — ${STEPS.length} steps, nothing run (no lock, no log, no heartbeat):`);
   STEPS.forEach((step, i) => {
     const cmd = step.cmd.replace(NODE, "node");
     const notes = [
@@ -249,7 +285,7 @@ function main() {
   }
 
   if (range) {
-    const label = isBackfill ? "backfill" : "auto";
+    const label = isBackfill ? "backfill" : tier ? `auto, ${tier} tier` : "auto";
     const weekDesc = range.weeks.map((w) => `W${w.weekNumber}/${w.year}`).join(", ");
     const monthDesc = range.months.map((m) => `${m.month}/${m.year}`).join(", ");
     log(`=== Brickomations Run: ${new Date().toLocaleString()} [${label} ${range.from} → ${range.to}; weeks ${weekDesc}; months ${monthDesc}] ===`);
@@ -358,4 +394,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { extractErrorDetail, STEPS };
+module.exports = { extractErrorDetail, STEPS, buildSteps, TIERS };

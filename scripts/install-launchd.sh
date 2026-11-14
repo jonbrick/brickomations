@@ -48,16 +48,19 @@ retire_one() {
   fi
 }
 
-install_one "com.brickomations.daily"
+install_one "com.brickomations.sync-morning" # heavy yarn sync at 05:20 (full resync, full Linear pull)
+install_one "com.brickomations.sync-hourly"  # light yarn sync every 2 h, 07:00–23:00 except 21:00
+install_one "com.brickomations.sync-evening" # heavy yarn sync at 21:00 (before the 21:15 evening render)
 install_one "com.brickomations.daily-brief" # pre-stages briefs/<date>.json at 05:50
-install_one "com.brickomations.pull-linear" # caches Linear projects + assigned issues at 06:30
 install_one "com.brickomations.watchdog"   # push-based heartbeat; reads ping files
-install_one "com.brickomations.caffeinate" # holds idle sleep off 05:45–23:30 daily
+install_one "com.brickomations.caffeinate" # holds idle sleep off 05:15–23:30 daily
 install_one "com.brickomations.daily-text-morning" # texts ### MORNING SUMMARY at 06:20 (polls to 06:35)
 install_one "com.brickomations.evening-render"      # fills Tasks/Completed Events/Calendar at 21:15 (before the 21:20 processor)
 install_one "com.brickomations.daily-text-evening"  # texts ### Evening Summary at 21:45 (polls to 22:00)
 
 retire_one "com.brickomations.app-launcher" # folded into the watchdog: it relaunches Claude/Obsidian on any 5-min tick that finds one closed
+retire_one "com.brickomations.daily"        # split into sync-morning / sync-hourly / sync-evening
+retire_one "com.brickomations.pull-linear"  # the full Linear pull now runs inside sync-morning / sync-evening
 
 echo ""
 echo "Done."

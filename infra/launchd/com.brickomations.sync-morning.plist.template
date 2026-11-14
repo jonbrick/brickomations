@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.brickomations.sync-morning</string>
+
+    <!-- Heavy tier: every step — the day's full calendar resync (first run    -->
+    <!-- of the day), summarize, aggregate, the full Linear pull (tasks +      -->
+    <!-- projects + team cache; replaces the old 6:30 AM pull-linear job),     -->
+    <!-- vault-sync, daily-records. Wrapped in caffeinate for its lifetime.    -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HOME__/projects/brickomations/scripts/run-with-wakelock.sh</string>
+        <string>/opt/homebrew/bin/node</string>
+        <string>__HOME__/projects/brickomations/cli/sync.js</string>
+        <string>--auto</string>
+        <string>--tier=morning</string>
+    </array>
+
+    <!-- 5:20 AM — 5 min after the 05:15 pmset wake. The 15-min wall-clock cap -->
+    <!-- ends it by 5:35, ahead of the 5:50 daily brief that reads its output. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>5</integer>
+        <key>Minute</key><integer>20</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/projects/brickomations/local/logs/launchd-stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/projects/brickomations/local/logs/launchd-stderr.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>__HOME__/projects/brickomations</string>
+</dict>
+</plist>

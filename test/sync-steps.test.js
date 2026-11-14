@@ -1,30 +1,67 @@
-// Pins the shape of the 2-hourly `yarn sync` Linear step: tasks-only, before
-// `pull` (so the same run brings Linear changes down to data/life.json), and
-// soft (a Linear failure must not fail the run or its heartbeat).
+// Pins the shape of `yarn sync`'s tiers and its Linear step.
+//   morning / evening — heavy: every step, full Linear pull
+//   hourly            — light: no summarize / aggregate / vault-sync / daily-records,
+//                       Linear tasks-only
+//   (none)            — every step, Linear tasks-only (manual runs, backfills)
+// The Linear step always runs before `pull` (so the same run brings Linear
+// changes down to data/life.json) and is soft (a Linear failure must not fail
+// the run or its heartbeat).
 
 const { assert, assertEqual } = require("./helpers");
-const { STEPS } = require("../cli/sync");
+const { buildSteps, TIERS } = require("../cli/sync");
 
-const names = STEPS.map((s) => s.name);
-const linear = STEPS.find((s) => s.name === "linear");
+const names = (steps) => steps.map((s) => s.name).join(",");
+const linearOf = (steps) => steps.find((s) => s.name === "linear");
+
+const HEAVY =
+  "tokens:refresh,collect,update,summarize,aggregate,linear,pull,vault-sync,granola-logs,daily-records";
+const LIGHT = "tokens:refresh,collect,update,linear,pull,granola-logs";
 
 module.exports = {
-  "sync has a linear step"() {
-    assert(linear, `steps: ${names.join(", ")}`);
+  "tiers are morning, evening, hourly"() {
+    assertEqual(TIERS.join(","), "morning,evening,hourly", "TIERS");
   },
 
-  "the linear step runs before pull"() {
-    assert(names.indexOf("linear") < names.indexOf("pull"), `order: ${names.join(" → ")}`);
+  "morning and evening run every step"() {
+    assertEqual(names(buildSteps("morning", "", "node")), HEAVY, "morning");
+    assertEqual(names(buildSteps("evening", "", "node")), HEAVY, "evening");
   },
 
-  "the linear step is tasks-only on its default window"() {
-    assert(linear.cmd.includes("cli/pull-linear.js --tasks-only"), linear.cmd);
-    assert(!/--(from|to|date|days)=/.test(linear.cmd), `no window flags: ${linear.cmd}`);
+  "hourly is the light set"() {
+    assertEqual(names(buildSteps("hourly", "", "node")), LIGHT, "hourly");
   },
 
-  "the linear step is the only soft step"() {
-    assertEqual(linear.soft, true, "linear.soft");
-    const soft = STEPS.filter((s) => s.soft).map((s) => s.name);
-    assertEqual(soft.join(","), "linear", "soft steps");
+  "an untiered run keeps every step"() {
+    assertEqual(names(buildSteps(null, "", "node")), HEAVY, "untiered");
+  },
+
+  "morning and evening run the full Linear pull"() {
+    for (const tier of ["morning", "evening"]) {
+      const cmd = linearOf(buildSteps(tier, "", "node")).cmd;
+      assertEqual(cmd, "node cli/pull-linear.js", `${tier} linear cmd`);
+    }
+  },
+
+  "hourly and untiered runs are Linear tasks-only"() {
+    for (const tier of ["hourly", null]) {
+      const cmd = linearOf(buildSteps(tier, "", "node")).cmd;
+      assertEqual(cmd, "node cli/pull-linear.js --tasks-only", `${tier} linear cmd`);
+    }
+  },
+
+  "the linear step never takes the sync's date window"() {
+    for (const tier of [...TIERS, null]) {
+      const cmd = linearOf(buildSteps(tier, " --from=2026-11-01 --to=2026-11-21", "node")).cmd;
+      assert(!/--(from|to|date|days)=/.test(cmd), `${tier}: ${cmd}`);
+    }
+  },
+
+  "linear runs before pull and is the only soft step, in every tier"() {
+    for (const tier of [...TIERS, null]) {
+      const steps = buildSteps(tier, "", "node");
+      const order = steps.map((s) => s.name);
+      assert(order.indexOf("linear") < order.indexOf("pull"), `${tier}: ${order.join(" → ")}`);
+      assertEqual(steps.filter((s) => s.soft).map((s) => s.name).join(","), "linear", `${tier} soft steps`);
+    }
   },
 };
