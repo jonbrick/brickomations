@@ -9,7 +9,7 @@
     <!-- Cowork morning-brief writes) with a tappable obsidian:// link back into   -->
     <!-- the note. Fires 06:20; the script polls the note until the summary lands  -->
     <!-- or 06:35, then falls back to ### AT A GLANCE. Bounded: worst case ~15     -->
-    <!-- min, inside the daily caffeinate window (05:45-23:30); osascript is       -->
+    <!-- min, inside the daily caffeinate window (05:15-23:30); osascript is       -->
     <!-- timeout-bounded. No heartbeat/watchdog: the delivered text is its own     -->
     <!-- success signal — a missing text is self-evident.                          -->
     <key>ProgramArguments</key>

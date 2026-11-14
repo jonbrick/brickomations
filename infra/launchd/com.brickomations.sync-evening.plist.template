@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.brickomations.sync-evening</string>
+
+    <!-- Heavy tier: same steps as sync-morning (the calendar update takes the -->
+    <!-- unchanged-records fast path — the full resync already ran at 5:20).   -->
+    <!-- Wrapped in caffeinate for its lifetime.                                -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HOME__/projects/brickomations/scripts/run-with-wakelock.sh</string>
+        <string>/opt/homebrew/bin/node</string>
+        <string>__HOME__/projects/brickomations/cli/sync.js</string>
+        <string>--auto</string>
+        <string>--tier=evening</string>
+    </array>
+
+    <!-- 9:00 PM — typically done by ~9:05, before the 9:15 PM evening render  -->
+    <!-- reads its snapshot and the 9:20 PM Cowork evening processor.          -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>21</integer>
+        <key>Minute</key><integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/projects/brickomations/local/logs/launchd-stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/projects/brickomations/local/logs/launchd-stderr.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>__HOME__/projects/brickomations</string>
+</dict>
+</plist>
