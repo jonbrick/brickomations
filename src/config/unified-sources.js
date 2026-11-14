@@ -1036,6 +1036,32 @@ const INTEGRATIONS = {
       calendarCreatedProperty: "calendarCreated",
     },
   },
+  // World of Warcraft — Battle.net has no playtime API, so the mini polls for
+  // the game process (scripts/wow-tracker.js, launchd every 5 min) and this
+  // collects the local session log into the Steam DB. Calendar events come
+  // from the steam updater, which syncs every row in that shared DB — so
+  // updateCalendar stays false here, or each session would get two events.
+  wow: {
+    id: "wow",
+    name: "World of Warcraft (Video Games)",
+    notionDbEnvVar: "NOTION_VIDEO_GAMES_DATABASE_ID",
+    sharesDatabaseWith: "steam",
+    calendarRouting: ["videoGames"],
+    collect: true,
+    displayMetadata: {
+      tableTitle: "WORLD OF WARCRAFT SESSIONS",
+      emptyMessage:
+        "⚠️  No World of Warcraft sessions found for this date range\n",
+      displayType: "steam",
+    },
+    updateCalendar: false,
+    databaseConfig: {
+      dateProperty: "date",
+      uniqueIdProperty: "activityId",
+      uniqueIdType: "text",
+      calendarCreatedProperty: "calendarCreated",
+    },
+  },
   withings: {
     id: "withings",
     name: "Withings (Body Weight)",

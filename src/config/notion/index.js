@@ -6,6 +6,7 @@
 const oura = require("./oura");
 const strava = require("./strava");
 const steam = require("./steam");
+const wow = require("./wow");
 const githubPersonal = require("./github-personal");
 const githubWork = require("./github-work");
 const withings = require("./withings");
@@ -39,6 +40,7 @@ const databases = {
   githubPersonal: githubPersonal.database,
   githubWork: githubWork.database,
   steam: steam.database,
+  wow: wow.database,
   withings: withings.database,
   bloodPressure: bloodPressure.database,
   medications: medications.database,
@@ -69,6 +71,7 @@ const properties = {
   oura: oura.properties,
   strava: strava.properties,
   steam: steam.properties,
+  wow: wow.properties,
   githubPersonal: githubPersonal.properties,
   githubWork: githubWork.properties,
   withings: withings.properties,
@@ -101,6 +104,7 @@ const fieldMappings = {
   oura: oura.fieldMappings,
   strava: strava.fieldMappings,
   steam: steam.fieldMappings,
+  wow: wow.fieldMappings,
   githubPersonal: githubPersonal.fieldMappings,
   githubWork: githubWork.fieldMappings,
   withings: withings.fieldMappings,

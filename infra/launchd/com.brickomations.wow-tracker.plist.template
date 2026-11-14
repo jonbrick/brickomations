@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.brickomations.wow-tracker</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/node</string>
+        <string>__HOME__/projects/brickomations/scripts/wow-tracker.js</string>
+    </array>
+
+    <!-- Every 5 minutes. Polls for the World of Warcraft process and logs   -->
+    <!-- sessions to local/wow/sessions.jsonl. Silent unless a session opens -->
+    <!-- or closes. collect-wow.js reads the log during yarn collect.        -->
+    <key>StartInterval</key>
+    <integer>300</integer>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/projects/brickomations/local/logs/wow-tracker-stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/projects/brickomations/local/logs/wow-tracker-stderr.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>__HOME__/projects/brickomations</string>
+</dict>
+</plist>
