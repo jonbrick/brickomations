@@ -3,24 +3,22 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.brickomations.daily</string>
+    <string>com.brickomations.sync-hourly</string>
 
-    <!-- Wraps `node cli/sync.js --auto` in caffeinate so the system holds awake -->
-    <!-- for exactly the script's lifetime. Wakelock releases on script exit.   -->
+    <!-- Light tier: tokens → collect → calendar update (unchanged records    -->
+    <!-- skipped) → Linear tasks-only → pull → granola-logs. Wrapped in       -->
+    <!-- caffeinate so the system holds awake for exactly the run's lifetime. -->
     <key>ProgramArguments</key>
     <array>
         <string>__HOME__/projects/brickomations/scripts/run-with-wakelock.sh</string>
         <string>/opt/homebrew/bin/node</string>
         <string>__HOME__/projects/brickomations/cli/sync.js</string>
         <string>--auto</string>
+        <string>--tier=hourly</string>
     </array>
 
-    <!-- 9 runs/day — every 2 hours, 7 AM–11 PM (wake to sleep).                   -->
-    <!-- Paired with pmset wake schedule (5 min before each).                       -->
-    <!--  7 AM — kickoff (concurrent with 7 AM Cowork morning-brief)               -->
-    <!--  9, 11 AM, 1, 3, 5, 7 PM — daytime cadence                                -->
-    <!--  9 PM — concurrent with 9 PM Cowork evening-processor                     -->
-    <!--  11 PM — end of day                                                       -->
+    <!-- Every 2 hours, 7 AM–11 PM, except 9 PM — the evening tier owns that  -->
+    <!-- slot (com.brickomations.sync-evening). 5:20 AM is the morning tier.  -->
     <key>StartCalendarInterval</key>
     <array>
         <dict><key>Hour</key><integer>7</integer><key>Minute</key><integer>0</integer></dict>
@@ -30,7 +28,6 @@
         <dict><key>Hour</key><integer>15</integer><key>Minute</key><integer>0</integer></dict>
         <dict><key>Hour</key><integer>17</integer><key>Minute</key><integer>0</integer></dict>
         <dict><key>Hour</key><integer>19</integer><key>Minute</key><integer>0</integer></dict>
-        <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>0</integer></dict>
         <dict><key>Hour</key><integer>23</integer><key>Minute</key><integer>0</integer></dict>
     </array>
 

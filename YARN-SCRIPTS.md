@@ -95,8 +95,9 @@ cd ~/projects/brickomations && yarn pull:linear
                             # issues-only leg behind linear:week /
                             # linear:range; --days= / --from= --to= set
                             # the settled window (default 21 days).
-                            # the tasks-only leg also runs inside every
-                            # yarn sync (see Heavy)
+                            # on schedule it runs inside yarn sync: the
+                            # full pull in the morning/evening tiers, the
+                            # tasks-only leg every 2 hours (see Heavy).
                             # no prompts
 
 cd ~/projects/brickomations && yarn push --auto
@@ -159,12 +160,25 @@ cd ~/projects/brickomations && node scripts/reconcile-planned-events.js --pull <
 ```
 cd ~/projects/brickomations && yarn sync
                             # tokens → collect → update → summarize →
-                            # aggregate → linear → pull → vault-sync. the
-                            # Mac mini runs this on schedule — manual runs
-                            # are for backfills (yarn sync --from=… --to=…).
-                            # linear = pull:linear --tasks-only, every 2
-                            # hours; a Linear failure is logged, never fails
-                            # the run. --dry-run lists the steps, runs none
+                            # aggregate → linear → pull → vault-sync →
+                            # granola-logs → daily-records, Linear
+                            # tasks-only. manual runs + backfills
+                            # (yarn sync --from=… --to=…)
+
+cd ~/projects/brickomations && yarn sync:morning
+                            # heavy tier, 5:20 AM on the mini: every step,
+                            # full Linear pull. sync:evening = the same at
+                            # 9 PM. add --auto for the scheduled shape
+
+cd ~/projects/brickomations && yarn sync:hourly
+                            # light tier, every 2 h 7 AM–11 PM (not 9 PM):
+                            # tokens → collect → update → linear
+                            # tasks-only → pull → granola-logs
+
+                            # every tier: a Linear failure is logged, never
+                            # fails the run. --dry-run lists a tier's steps
+                            # and flags, runs none:
+                            # yarn sync --auto --tier=hourly --dry-run
 
 cd ~/projects/brickomations && yarn summarize
                             # week rollups alone (month: yarn aggregate).
