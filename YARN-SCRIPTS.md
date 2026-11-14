@@ -40,7 +40,7 @@ machine).
 ```
 cd ~/projects/brickomations && yarn collect --auto
                             # Oura, Strava, Withings, blood pressure,
-                            # Steam, GitHub → Notion. ±3 days around
+                            # Steam, WoW, GitHub → Notion. ±3 days around
                             # today. no prompts
 
 cd ~/projects/brickomations && yarn update --auto
@@ -69,7 +69,7 @@ cd ~/projects/brickomations && yarn journal:import
                             # no-op. no prompts
 ```
 
---source ids: oura strava withings bloodPressure steam githubPersonal
+--source ids: oura strava withings bloodPressure steam wow githubPersonal
 githubWork (+ medications supplements events trips on update only).
 
 No meditation collector exists — that calendar is hand-filled.

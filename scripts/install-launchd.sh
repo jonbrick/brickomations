@@ -57,6 +57,7 @@ install_one "com.brickomations.caffeinate" # holds idle sleep off 05:15–23:30 
 install_one "com.brickomations.daily-text-morning" # texts ### MORNING SUMMARY at 06:20 (polls to 06:35)
 install_one "com.brickomations.evening-render"      # fills Tasks/Completed Events/Calendar at 21:15 (before the 21:20 processor)
 install_one "com.brickomations.daily-text-evening"  # texts ### Evening Summary at 21:45 (polls to 22:00)
+install_one "com.brickomations.wow-tracker"         # polls for World of Warcraft every 5 min → local/wow/sessions.jsonl
 
 retire_one "com.brickomations.app-launcher" # folded into the watchdog: it relaunches Claude/Obsidian on any 5-min tick that finds one closed
 retire_one "com.brickomations.daily"        # split into sync-morning / sync-hourly / sync-evening

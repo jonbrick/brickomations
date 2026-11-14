@@ -330,3 +330,43 @@ also require a Lambda change + redeploy.
 the Video Games calendar event. The source of truth is the `DAILY_` period record in
 the DynamoDB `steam-playtime` table — a manual backfill over that date recreates the
 Notion/calendar entries from it unless that record is deleted too (AWS console).
+
+## World of Warcraft (Battle.net)
+
+WoW runs through Battle.net, not Steam, and Battle.net has no playtime or
+session API. WoW sessions are tracked locally on the Mac mini (the only machine
+with WoW installed) and land in the same 🎮 video games Notion DB and Video
+Games calendar as Steam.
+
+```
+launchd every 5 min (com.brickomations.wow-tracker)
+    └─► scripts/wow-tracker.js — pgrep for the WoW game binary
+            ├─► local/wow/state.json      (open session: start, lastSeen)
+            └─► local/wow/sessions.jsonl  (one line per closed session, UTC)
+
+yarn collect  →  collect-wow.js  →  same Notion DB as Steam (source id `wow`)
+yarn update   →  steam updater syncs every row in that DB → Video Games calendar
+```
+
+**Session rules** (`src/utils/wow-sessions.js`, tested in `test/wow-sessions.test.js`):
+
+- First poll that sees the game opens a session; each later sighting extends `lastSeen`.
+- Game gone at the next poll → session closes at that poll (≤5 min over).
+- Gap over 15 min between polls (mini slept, job stalled) → session closes at
+  `lastSeen`; if the game is still running, a new session opens.
+- Times are exact to the minute — not snapped to Steam's 30-min blocks.
+- A session belongs to the Eastern date it started on.
+
+**Notion rows** use the Steam properties unchanged: Game Name `World of Warcraft`,
+Activity ID `World-of-Warcraft-YYYY-MM-DD-P{n}` (periods numbered per Eastern day in
+start order — stable because the log is append-only).
+
+**Shared-DB wiring:** the `wow` integration has `updateCalendar: false` (the
+steam updater already syncs the whole DB — enabling both would double every event)
+and `sharesDatabaseWith: "steam"` (so `yarn pull` doesn't pull the DB twice into
+`data/collected.json`). WoW rows arrive in the `steam` bucket.
+
+**Limitation:** same as Steam — the game left open and idle counts as play.
+
+**Install** (mini, after merge): `scripts/install-launchd.sh`. Logs:
+`local/logs/wow-tracker-stdout.log` / `-stderr.log`.

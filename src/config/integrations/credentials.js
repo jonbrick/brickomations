@@ -275,6 +275,16 @@ const dateHandling = {
     extractionMethod: "convertUTCToEasternDate", // Converts UTC to Eastern Time with DST handling
     formatMethod: "formatDateOnly",
   },
+  // World of Warcraft — local session log (scripts/wow-tracker.js), same
+  // handling as Steam: UTC timestamps, Eastern date of the session start.
+  wow: {
+    sourceFormat: "iso_utc",
+    sourceTimezone: "UTC",
+    targetTimezone: "America/New_York",
+    dateOffset: 0,
+    extractionMethod: "convertUTCToEasternDate",
+    formatMethod: "formatDateOnly",
+  },
   /**
    * Withings Configuration
    * 

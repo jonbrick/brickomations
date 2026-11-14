@@ -81,6 +81,7 @@ function formatRecordForLogging(record, sourceType) {
     case "strava":
       return record.activityId || "Unknown";
     case "steam":
+    case "wow":
       return record.gameName || "Unknown";
     case "github":
       return record.repository || "Unknown";

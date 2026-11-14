@@ -520,7 +520,13 @@ async function pullCollectedData(spinner, startDate, endDate) {
   // Pull from each integration that has collect: true or a databaseConfig
   const integrationIds = Object.keys(INTEGRATIONS).filter((id) => {
     const integration = INTEGRATIONS[id];
-    return integration.databaseConfig && config.notion.databases[id];
+    // sharesDatabaseWith: the owner integration already pulls this DB —
+    // pulling it again would duplicate every row (WoW shares Steam's DB).
+    return (
+      integration.databaseConfig &&
+      config.notion.databases[id] &&
+      !integration.sharesDatabaseWith
+    );
   });
 
   for (const id of integrationIds) {
