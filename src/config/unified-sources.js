@@ -984,19 +984,19 @@ const INTEGRATIONS = {
   },
   steam: {
     id: "steam",
-    name: "Steam (Video Games)",
+    name: "Steam",
     notionDbEnvVar: "NOTION_VIDEO_GAMES_DATABASE_ID",
     calendarRouting: ["videoGames"],
     collect: true,
     displayMetadata: {
-      tableTitle: "STEAM GAMING ACTIVITIES",
+      tableTitle: "STEAM SESSIONS",
       emptyMessage:
-        "⚠️  No Steam gaming activities found for this date range\n",
+        "⚠️  No Steam sessions found for this date range\n",
       displayType: "steam",
     },
     updateCalendar: true,
     calendarSyncMetadata: {
-      emptyMessage: "✅ No gaming records found without calendar events\n",
+      emptyMessage: "✅ No Steam or WoW sessions missing calendar events\n",
       sourceType: "steam",
       eventType: "dateTime",
       displayNameProperty: "gameName",
@@ -1024,10 +1024,10 @@ const INTEGRATIONS = {
           },
         },
       ],
-      tableTitle: "🎮 STEAM GAMING RECORDS TO SYNC",
+      tableTitle: "🎮 STEAM + WOW SESSIONS TO SYNC",
       displayFormat: (record) =>
         `🎮 ${record.date}: ${record.gameName} (${record.playtime}) ${record.startTimeDisplay}-${record.endTimeDisplay}`,
-      recordLabel: "gaming record",
+      recordLabel: "gaming session",
     },
     databaseConfig: {
       dateProperty: "date",
@@ -1043,15 +1043,15 @@ const INTEGRATIONS = {
   // updateCalendar stays false here, or each session would get two events.
   wow: {
     id: "wow",
-    name: "World of Warcraft (Video Games)",
+    name: "WoW",
     notionDbEnvVar: "NOTION_VIDEO_GAMES_DATABASE_ID",
     sharesDatabaseWith: "steam",
     calendarRouting: ["videoGames"],
     collect: true,
     displayMetadata: {
-      tableTitle: "WORLD OF WARCRAFT SESSIONS",
+      tableTitle: "WOW SESSIONS",
       emptyMessage:
-        "⚠️  No World of Warcraft sessions found for this date range\n",
+        "⚠️  No WoW sessions found for this date range\n",
       displayType: "steam",
     },
     updateCalendar: false,
