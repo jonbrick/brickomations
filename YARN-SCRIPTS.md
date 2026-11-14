@@ -31,7 +31,7 @@ cd ~/projects/brickomations && yarn linear:range --from=2026-09-21 --to=2026-09-
                             # no prompts
 ```
 
-Faster still: the shell aliases `morning`, `linear-week` and
+Faster still: the shell aliases `morning`, `linear` and
 `linear-range` run these from any directory (defined in ~/.zshrc, per
 machine).
 
@@ -95,6 +95,8 @@ cd ~/projects/brickomations && yarn pull:linear
                             # issues-only leg behind linear:week /
                             # linear:range; --days= / --from= --to= set
                             # the settled window (default 21 days).
+                            # the tasks-only leg also runs inside every
+                            # yarn sync (see Heavy)
                             # no prompts
 
 cd ~/projects/brickomations && yarn push --auto
@@ -157,9 +159,12 @@ cd ~/projects/brickomations && node scripts/reconcile-planned-events.js --pull <
 ```
 cd ~/projects/brickomations && yarn sync
                             # tokens → collect → update → summarize →
-                            # aggregate → pull → vault-sync. the Mac mini
-                            # runs this on schedule — manual runs are for
-                            # backfills (yarn sync --from=… --to=…)
+                            # aggregate → linear → pull → vault-sync. the
+                            # Mac mini runs this on schedule — manual runs
+                            # are for backfills (yarn sync --from=… --to=…).
+                            # linear = pull:linear --tasks-only, every 2
+                            # hours; a Linear failure is logged, never fails
+                            # the run. --dry-run lists the steps, runs none
 
 cd ~/projects/brickomations && yarn summarize
                             # week rollups alone (month: yarn aggregate).

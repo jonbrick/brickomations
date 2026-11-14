@@ -2,12 +2,13 @@
 
 /**
  * Sync CLI
- * Runs the full Brickomations pipeline: tokens:refresh → collect → update → summarize → aggregate → pull → vault-sync
+ * Runs the full Brickomations pipeline: tokens:refresh → collect → update → summarize → aggregate → linear → pull → vault-sync
  * Called by launchd or manually via `yarn sync`
  *
  * Usage:
  *   yarn sync                                       # Run full pipeline for today (interactive where applicable)
  *   yarn sync --auto                                # Non-interactive (used by launchd) — default ±3 day window
+ *   yarn sync --auto --dry-run                      # Print the steps and their commands; runs nothing
  *   yarn sync --date=YYYY-MM-DD                     # Backfill a single past day end-to-end
  *   yarn sync --from=YYYY-MM-DD --to=YYYY-MM-DD     # Backfill a date range; summarize/aggregate fire once per unique week/month touched
  *
@@ -25,6 +26,7 @@ const path = require("path");
 const { parseDateRangeFromArgv, dateRangeFlags, defaultAutoRange } = require("../src/utils/cli");
 
 const autoMode = process.argv.includes("--auto");
+const dryRun = process.argv.includes("--dry-run");
 
 const { range: explicitRange, error: rangeError } = parseDateRangeFromArgv(process.argv);
 if (rangeError) {
@@ -74,6 +76,16 @@ const STEPS = [
   { name: "update", cmd: `${NODE} cli/update-calendar.js --auto${rangeFlag}`, timeout: 9 * 60 * 1000 },
   { name: "summarize", cmd: `${NODE} cli/summarize-week.js --auto${rangeFlag}` },
   { name: "aggregate", cmd: `${NODE} cli/aggregate-month.js --auto${rangeFlag}` },
+  // Assigned Linear issues → Notion 2026 Tasks, so a ticket closed at 2 PM
+  // reaches Notion by the next run instead of the 6:30 AM pull:linear. Runs
+  // before `pull` so the same run brings the change down to data/life.json.
+  // --tasks-only on its default 21-day window: no projects, no team cache, no
+  // heartbeat ping (the 6:30 AM job's heartbeat still attests Linear). Deliberately
+  // no ${rangeFlag}. `soft`: a Linear failure is logged and the run moves on —
+  // it doesn't fail this run or its heartbeat, so a Linear outage can't stale
+  // or alarm the Notion/Calendar side. 4-min step timeout sits just above
+  // pull-linear's own 3-min wall-clock cap, so its clearer message wins the race.
+  { name: "linear", cmd: `${NODE} cli/pull-linear.js --tasks-only`, soft: true, timeout: 4 * 60 * 1000 },
   { name: "pull", cmd: `${NODE} cli/pull.js --auto`, timeout: 8 * 60 * 1000 },
   { name: "vault-sync", cmd: `${NODE} cli/vault-sync.js --auto` },
   // Trash every Granola Sync debug log but the newest — the watchdog reads only
@@ -199,7 +211,24 @@ function releaseLock() {
   }
 }
 
+function printDryRun() {
+  console.log(`[dry-run] ${STEPS.length} steps, nothing run (no lock, no log, no heartbeat):`);
+  STEPS.forEach((step, i) => {
+    const cmd = step.cmd.replace(NODE, "node");
+    const notes = [
+      `timeout ${Math.round((step.timeout || DEFAULT_TIMEOUT) / 60000)}min`,
+      step.soft ? "soft — a failure is logged, the run continues" : null,
+    ].filter(Boolean).join("; ");
+    console.log(`  ${i + 1}. ${step.name}: ${cmd}  (${notes})`);
+  });
+}
+
 function main() {
+  if (dryRun) {
+    printDryRun();
+    return;
+  }
+
   // Ensure log directory exists
   fs.mkdirSync(logDir, { recursive: true });
 
@@ -250,6 +279,14 @@ function main() {
         fs.appendFileSync(logFile, output);
       }
     } catch (err) {
+      if (step.soft) {
+        if (autoMode && err.stdout) fs.appendFileSync(logFile, err.stdout);
+        if (autoMode && err.stderr) fs.appendFileSync(logFile, err.stderr);
+        const detail = extractErrorDetail(err, step);
+        const exitInfo = err.signal ? `signal ${err.signal}` : `exit code ${err.status}`;
+        log(`WARN: ${step.name} failed (${exitInfo}), continuing${detail ? ` — ${detail}` : ""}`);
+        continue;
+      }
       errors.push(step.name);
       if (autoMode && err.stdout) {
         fs.appendFileSync(logFile, err.stdout);
@@ -321,4 +358,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { extractErrorDetail };
+module.exports = { extractErrorDetail, STEPS };
