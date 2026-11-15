@@ -5,6 +5,9 @@
  *
  * Usage: yarn push
  *        yarn push --auto   # Non-interactive, pushes all sections
+ *        yarn push --auto --only=tasks   # just these sections (comma-separated):
+ *                           # plan, collected, summaries, calendar, nyc, retro,
+ *                           # life, or tasks (life.json's 2026 Tasks only)
  * Input: data/*.json
  */
 
@@ -50,6 +53,12 @@ const LIFE_CONFIG_KEYS = {
 
 const dryRun = process.argv.includes("--dry-run");
 const autoMode = process.argv.includes("--auto");
+const onlyArg = process.argv.find((a) => a.startsWith("--only="));
+const ONLY_SECTIONS = ["plan", "collected", "summaries", "calendar", "nyc", "retro", "life", "tasks"];
+
+// Config keys whose date properties push. Opt-in: elsewhere a changed record's
+// unchanged dates would ride along, and date writes there aren't needed yet.
+const DATE_PUSH_KEYS = new Set(["tasks"]);
 
 // --- Hashing (must match pull.js) ---
 
@@ -96,7 +105,7 @@ const PUSHABLE_TYPES = new Set([
  * Uses _propertyTypes from pull to know exactly which fields are pushable.
  * Skips relations, rollups, formulas, dates, and synthetic fields.
  */
-function buildPropertiesFromRecord(record) {
+function buildPropertiesFromRecord(record, { pushDates = false } = {}) {
   const properties = {};
   const types = record._propertyTypes || {};
 
@@ -110,8 +119,17 @@ function buildPropertiesFromRecord(record) {
     // Skip null/undefined
     if (value === null || value === undefined) continue;
 
-    // If we have type info, only include pushable types
     const type = types[key];
+
+    // Dates push only where opted in — a range carries its synthetic " End".
+    if (type === "date") {
+      if (pushDates && typeof value === "string" && value) {
+        properties[key] = { date: { start: value, end: record[`${key} End`] || null } };
+      }
+      continue;
+    }
+
+    // If we have type info, only include pushable types
     if (type && !PUSHABLE_TYPES.has(type)) continue;
 
     // If no type info (legacy data), skip arrays (likely relations)
@@ -178,7 +196,7 @@ async function pushRecords(records, label, spinner, configKey = null) {
     }
 
     const notionId = record._notionId;
-    const properties = buildPropertiesFromRecord(record);
+    const properties = buildPropertiesFromRecord(record, { pushDates: DATE_PUSH_KEYS.has(configKey) });
 
     // Skip if no meaningful properties to push
     if (Object.keys(properties).length === 0) {
@@ -200,7 +218,10 @@ async function pushRecords(records, label, spinner, configKey = null) {
     }
 
     if (dryRun) {
-      const name = Object.values(properties).find((v) => typeof v === "string") || notionId;
+      const name =
+        (record._titleKey && record[record._titleKey]) ||
+        Object.values(properties).find((v) => typeof v === "string" && v) ||
+        notionId;
       console.log(`  ~ Would update: ${name}`);
       results.updated++;
       continue;
@@ -391,15 +412,16 @@ function isContentChanged(record) {
   return currentHash !== record._contentHash;
 }
 
-async function pushLifeData(spinner) {
+async function pushLifeData(spinner, { tasksOnly = false } = {}) {
   const data = readDataFile("life.json");
   if (!data) return;
 
-  console.log("\nPushing life data...");
+  console.log(tasksOnly ? "\nPushing tasks..." : "\nPushing life data...");
 
   for (const [key, records] of Object.entries(data)) {
     if (key === "_meta") continue;
     if (!Array.isArray(records)) continue;
+    if (tasksOnly && key !== "tasks") continue;
     const configKey = LIFE_CONFIG_KEYS[key] || null;
     await pushRecords(records, key, spinner, configKey);
   }
@@ -451,7 +473,23 @@ async function main() {
 
   let sections;
 
-  if (autoMode) {
+  if (onlyArg) {
+    sections = onlyArg.slice("--only=".length).split(",").map((s) => s.trim()).filter(Boolean);
+    const unknown = sections.filter((s) => !ONLY_SECTIONS.includes(s));
+    if (sections.length === 0 || unknown.length > 0) {
+      console.error(`❌ --only takes ${ONLY_SECTIONS.join(", ")} (got ${JSON.stringify(onlyArg)})`);
+      process.exit(1);
+    }
+    if (!autoMode && !dryRun) {
+      const { confirmed } = await inquirer.prompt([
+        { type: "confirm", name: "confirmed", message: `Push ${sections.join(", ")} to Notion/Calendar?`, default: true },
+      ]);
+      if (!confirmed) {
+        console.log("Cancelled.");
+        return;
+      }
+    }
+  } else if (autoMode) {
     // "nyc" removed for now — Museums DB not shared with the BrickBot integration (object_not_found)
     sections = ["plan", "collected", "summaries", "calendar", "retro", "life"];
   } else {
@@ -500,6 +538,7 @@ async function main() {
     if (sections.includes("nyc")) await pushNycData(spinner);
     if (sections.includes("retro")) await pushRetroData(spinner);
     if (sections.includes("life")) await pushLifeData(spinner);
+    else if (sections.includes("tasks")) await pushLifeData(spinner, { tasksOnly: true });
 
     console.log("\n✅ Push complete.\n");
   } catch (error) {

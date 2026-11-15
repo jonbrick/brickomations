@@ -105,6 +105,14 @@ cd ~/projects/brickomations && yarn push --auto
                             # skill-invoked only, never scheduled.
                             # no prompts
 
+cd ~/projects/brickomations && yarn push --auto --only=tasks
+                            # just the named sections (comma-separated:
+                            # plan, collected, summaries, calendar, nyc,
+                            # retro, life, tasks). tasks = life.json's
+                            # 2026 Tasks only, Due Date included — what
+                            # /reset-today pushes. --dry-run previews.
+                            # no prompts
+
 cd ~/projects/brickomations && yarn vault-sync
                             # Notion → markdown mirrors: retros/goals/high-level-goals/goal-themes
                             # into the vault's personal/; personal projects
@@ -134,6 +142,22 @@ cd ~/projects/brickomations && yarn --silent plan:view <N>
                             # day-by-day Sun → next Sun — 8 days, the extra
                             # Sunday tagged NEXT WEEK); stages
                             # local/plan/bundle-<N>.json
+
+cd ~/projects/brickomations && yarn reset:view
+                            # /reset-today's read: the past 7 days through
+                            # yesterday — open tasks (data/life.json) and
+                            # Planned: blocks (main personal calendar,
+                            # verdict from data/calendar.json actuals), both
+                            # numbered; stages local/reset/<today>.json.
+                            # read-only. no prompts
+
+cd ~/projects/brickomations && yarn reset:apply [--dry-run]
+                            # carries out the answers in
+                            # local/reset/<today>.json: tasks → data/life.json
+                            # (then yarn push --auto --only=tasks), blocks →
+                            # the calendar directly. Linear-born rows are
+                            # skipped (they move in Linear). Mac mini.
+                            # no prompts
 
 cd ~/projects/brickomations && yarn --silent month:view <MM>
                             # month MM planning render (prior month plan vs
