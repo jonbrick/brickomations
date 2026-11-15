@@ -10,6 +10,9 @@ const {
   plannedBlocks,
   numberItems,
   applyTaskAnswers,
+  openEntries,
+  applyEntryAnswers,
+  WONT_DO_STATUS,
 } = require("../src/workflows/reset-today");
 const { findActual } = require("../src/utils/planned-events");
 const { applyPlannedAction } = require("../src/workflows/planned-event-actions");
@@ -105,6 +108,46 @@ module.exports = {
     assertEqual(life[2]["Due Date"], "2026-11-09");
     assertEqual(life[3]["Due Date"], "2026-11-14");
     assertEqual(skipped.map((s) => s.n).join(","), "3,4,6");
+  },
+
+  "open entries: past their last day, not settled; a trip under way is not stale": () => {
+    const events = [
+      { _notionId: "e1", _titleKey: "Event Name", "Event Name": "Therapy", Status: "🟡 Scheduled", Date: "2026-11-13" },
+      { _notionId: "e2", _titleKey: "Event Name", "Event Name": "Game", Status: "🟢 Done", Date: "2026-11-05T20:15:00.000-05:00" },
+      { _notionId: "e3", _titleKey: "Event Name", "Event Name": "Skipped", Status: "🛑 Won't Do", Date: "2026-11-10" },
+      { _notionId: "e4", _titleKey: "Event Name", "Event Name": "MNF", Status: "🟡 Scheduled", Date: "2026-11-16T20:15:00.000-05:00" },
+    ];
+    const trips = [
+      { _notionId: "t1", _titleKey: "Trip Name", "Trip Name": "Baltimore", Status: "🟠 To Book", Date: "2026-11-13", "Date End": "2026-11-16" },
+      { _notionId: "t2", _titleKey: "Trip Name", "Trip Name": "Philly", Status: "🟡 Scheduled", Date: "2026-11-09", "Date End": "2026-11-10" },
+    ];
+    const open = openEntries(events, trips, WINDOW);
+    assertEqual(open.map((e) => e.notionId).join(","), "t2,e1");
+    assertEqual(open[0].kind, "trip");
+    assertEqual(open[0].dateEnd, "2026-11-10");
+  },
+
+  "applyEntryAnswers: done, won't do, and re-dates that keep time and range length": () => {
+    const events = [
+      { _notionId: "e1", Status: "🟡 Scheduled", Date: "2026-11-13" },
+      { _notionId: "e2", Status: "🟡 Scheduled", Date: "2026-11-12T19:00:00.000-05:00" },
+      { _notionId: "e3", Status: "🟠 To Book", Date: "2026-11-11" },
+    ];
+    const trips = [{ _notionId: "t1", Status: "🟡 Scheduled", Date: "2026-11-09", "Date End": "2026-11-10" }];
+    const { changes, skipped } = applyEntryAnswers(events, trips, [
+      { n: 1, notionId: "e1", title: "Therapy", action: "done" },
+      { n: 2, notionId: "e2", title: "Dinner", action: "date", date: "2026-11-18" },
+      { n: 3, notionId: "e3", title: "Show", action: "wontdo" },
+      { n: 4, notionId: "t1", title: "Philly", action: "date", date: "2026-11-22" },
+      { n: 5, notionId: "e1", title: "Therapy", action: "date", date: "soon" },
+    ]);
+    assertEqual(changes.length, 4);
+    assertEqual(events[0].Status, DONE_STATUS);
+    assertEqual(events[1].Date, "2026-11-18T19:00:00.000-05:00");
+    assertEqual(events[2].Status, WONT_DO_STATUS);
+    assertEqual(trips[0].Date, "2026-11-22");
+    assertEqual(trips[0]["Date End"], "2026-11-23");
+    assertEqual(skipped.map((s) => s.n).join(","), "5");
   },
 
   "planned action: never touches an event that isn't a live Planned: placeholder": async () => {

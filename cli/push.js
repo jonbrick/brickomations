@@ -7,7 +7,8 @@
  *        yarn push --auto   # Non-interactive, pushes all sections
  *        yarn push --auto --only=tasks   # just these sections (comma-separated):
  *                           # plan, collected, summaries, calendar, nyc, retro,
- *                           # life, or tasks (life.json's 2026 Tasks only)
+ *                           # life, tasks (life.json's 2026 Tasks only),
+ *                           # events / trips (plan.json's Events / Trips only)
  * Input: data/*.json
  */
 
@@ -54,11 +55,11 @@ const LIFE_CONFIG_KEYS = {
 const dryRun = process.argv.includes("--dry-run");
 const autoMode = process.argv.includes("--auto");
 const onlyArg = process.argv.find((a) => a.startsWith("--only="));
-const ONLY_SECTIONS = ["plan", "collected", "summaries", "calendar", "nyc", "retro", "life", "tasks"];
+const ONLY_SECTIONS = ["plan", "collected", "summaries", "calendar", "nyc", "retro", "life", "tasks", "events", "trips"];
 
 // Config keys whose date properties push. Opt-in: elsewhere a changed record's
 // unchanged dates would ride along, and date writes there aren't needed yet.
-const DATE_PUSH_KEYS = new Set(["tasks"]);
+const DATE_PUSH_KEYS = new Set(["tasks", "events", "trips"]);
 
 // --- Hashing (must match pull.js) ---
 
@@ -248,17 +249,18 @@ async function pushRecords(records, label, spinner, configKey = null) {
 
 // --- Push functions ---
 
-async function pushPlanData(spinner) {
+async function pushPlanData(spinner, { only = null } = {}) {
   const data = readDataFile("plan.json");
   if (!data) return;
 
-  console.log("\nPushing plan data...");
+  console.log(only ? `\nPushing ${only.join(" + ")}...` : "\nPushing plan data...");
+  const want = (key) => !only || only.includes(key);
 
-  await pushRecords(data.weeks, "Weeks", spinner, "weeks");
-  await pushRecords(data.months, "Months", spinner, "months");
-  await pushRecords(data.rocks, "Rocks", spinner, "rocks");
-  await pushRecords(data.events, "Events", spinner, "events");
-  await pushRecords(data.trips, "Trips", spinner, "trips");
+  if (want("weeks")) await pushRecords(data.weeks, "Weeks", spinner, "weeks");
+  if (want("months")) await pushRecords(data.months, "Months", spinner, "months");
+  if (want("rocks")) await pushRecords(data.rocks, "Rocks", spinner, "rocks");
+  if (want("events")) await pushRecords(data.events, "Events", spinner, "events");
+  if (want("trips")) await pushRecords(data.trips, "Trips", spinner, "trips");
 }
 
 async function pushCollectedData(spinner) {
@@ -532,6 +534,9 @@ async function main() {
 
   try {
     if (sections.includes("plan")) await pushPlanData(spinner);
+    else if (sections.includes("events") || sections.includes("trips")) {
+      await pushPlanData(spinner, { only: sections.filter((s) => s === "events" || s === "trips") });
+    }
     if (sections.includes("collected")) await pushCollectedData(spinner);
     if (sections.includes("summaries")) await pushSummaries(spinner);
     if (sections.includes("calendar")) await pushCalendar(spinner);

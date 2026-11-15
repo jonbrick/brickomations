@@ -6,17 +6,25 @@
  * The window is a rolling 7 days: the past 7 days through yesterday, across
  * any week boundary. Two inputs: 2026 Tasks rows due in the window that aren't
  * Done, and `Planned:` placeholders on the main personal calendar in the
- * window. Pure functions — the reset:view / reset:apply CLIs do the I/O.
+ * window — plus Events and Trips rows whose last day fell in the window but
+ * are still open (Scheduled, To Book, …). Pure functions — the reset:view /
+ * reset:apply CLIs do the I/O.
  *
  * Task writes land in data/life.json (Notion-native rows only, Due Date and
  * Status only); `yarn push --only=tasks` carries them to Notion. Linear-born
  * rows are never edited locally — the next pull:linear would overwrite them —
- * so their moves are reported for the skill to make in Linear.
+ * so their moves are reported for the skill to make in Linear. Event and
+ * trip writes land in data/plan.json (Date / Status); `yarn push
+ * --only=events,trips` carries them to Notion.
  */
 
 const { classify, findActual, localDate } = require("../utils/planned-events");
+const { CALENDAR_SKIP_STATUSES } = require("../config/notion/task-categories");
 
 const DONE_STATUS = "🟢 Done";
+const WONT_DO_STATUS = "🛑 Won't Do";
+// Settled events/trips — anything else past its date is still open.
+const SETTLED_STATUSES = new Set([DONE_STATUS, ...CALENDAR_SKIP_STATUSES]);
 const WINDOW_DAYS = 7;
 
 /** YYYY-MM-DD in New York for a Date (defaults to now). */
@@ -94,12 +102,53 @@ function plannedBlocks(events, calendarData, window) {
     .sort((a, b) => a.start.localeCompare(b.start));
 }
 
-/** Tasks numbered 1..n; blocks numbered fresh 1..m. */
-function numberItems(tasks, blocks) {
+/**
+ * Events and trips whose last day fell in the window but aren't settled,
+ * oldest first. A trip still under way (ends today or later) isn't stale yet.
+ */
+function openEntries(events, trips, window) {
+  const pick = (records, kind) =>
+    (records || [])
+      .filter((r) => !SETTLED_STATUSES.has(r.Status))
+      .map((r) => {
+        const start = localDate(r.Date);
+        const last = localDate(r["Date End"]) || start;
+        return { r, start, last };
+      })
+      .filter(({ last }) => inWindow(last, window))
+      .map(({ r, start, last }) => ({
+        kind,
+        notionId: r._notionId,
+        title: r[r._titleKey || (kind === "trip" ? "Trip Name" : "Event Name")],
+        date: start,
+        dateEnd: last !== start ? last : null,
+        status: r.Status,
+      }));
+
+  return [...pick(events, "event"), ...pick(trips, "trip")].sort(
+    (a, b) => a.date.localeCompare(b.date) || String(a.title).localeCompare(String(b.title))
+  );
+}
+
+/** Tasks numbered 1..n; blocks and entries each numbered fresh from 1. */
+function numberItems(tasks, blocks, entries = []) {
   return {
     tasks: tasks.map((t, i) => ({ n: i + 1, ...t })),
     blocks: blocks.map((b, i) => ({ n: i + 1, ...b })),
+    entries: entries.map((e, i) => ({ n: i + 1, ...e })),
   };
+}
+
+/**
+ * Re-date a Notion date value to a new day, keeping its time and offset; a
+ * range's End moves by the same number of days.
+ */
+function redate(value, newDay) {
+  return String(value).includes("T") ? `${newDay}${String(value).slice(10)}` : newDay;
+}
+
+function dayDelta(from, to) {
+  return Math.round((new Date(`${to}T12:00:00Z`) - new Date(`${from}T12:00:00Z`)) / 86400000);
 }
 
 /**
@@ -141,13 +190,56 @@ function applyTaskAnswers(lifeTasks, items) {
   return { changes, skipped };
 }
 
+/**
+ * Apply answered event/trip items to plan.json records, in place.
+ * Item actions: "done" → Done; "wontdo" → Won't Do; "date" → Date moves to
+ * item.date (time and range length kept).
+ * @returns {{changes: Array, skipped: Array}}
+ */
+function applyEntryAnswers(planEvents, planTrips, items) {
+  const byId = new Map([...(planEvents || []), ...(planTrips || [])].map((r) => [r._notionId, r]));
+  const changes = [];
+  const skipped = [];
+
+  for (const item of items || []) {
+    if (!item.action || item.applied) continue;
+    const rec = byId.get(item.notionId);
+    if (!rec) {
+      skipped.push({ n: item.n, title: item.title, reason: "not in data/plan.json (pull first)" });
+      continue;
+    }
+    if (item.action === "done" || item.action === "wontdo") {
+      const to = item.action === "done" ? DONE_STATUS : WONT_DO_STATUS;
+      changes.push({ n: item.n, title: item.title, field: "Status", from: rec.Status, to });
+      rec.Status = to;
+    } else if (item.action === "date") {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(item.date || "") || !rec.Date) {
+        skipped.push({ n: item.n, title: item.title, reason: `date must be YYYY-MM-DD (got ${JSON.stringify(item.date)})` });
+        continue;
+      }
+      const shift = dayDelta(localDate(rec.Date), item.date);
+      const from = rec.Date;
+      rec.Date = redate(rec.Date, item.date);
+      if (rec["Date End"]) rec["Date End"] = redate(rec["Date End"], shiftDate(localDate(rec["Date End"]), shift));
+      changes.push({ n: item.n, title: item.title, field: "Date", from, to: rec.Date });
+    } else {
+      skipped.push({ n: item.n, title: item.title, reason: `unknown action "${item.action}"` });
+    }
+  }
+
+  return { changes, skipped };
+}
+
 module.exports = {
   DONE_STATUS,
+  WONT_DO_STATUS,
   todayString,
   shiftDate,
   resetWindow,
   openTasks,
   plannedBlocks,
+  openEntries,
   numberItems,
   applyTaskAnswers,
+  applyEntryAnswers,
 };

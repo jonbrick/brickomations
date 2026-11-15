@@ -12,12 +12,16 @@
  *   Blocks → the main personal calendar directly (delete / move to a habit
  *            calendar / reschedule), each re-checked as a live `Planned:`
  *            event first.
+ *   Events & trips → data/plan.json only (Date / Status), then:
+ *              yarn push --auto --only=events,trips
  *
  * Item answers:
  *   task:  { "action": "done" }  |  { "action": "date", "date": "YYYY-MM-DD" }
  *   block: { "action": "delete" }
  *          { "action": "move", "targetKey": "cooking", "newSummary": "Roast chicken" }
  *          { "action": "reschedule", "newStart": "<ISO>", "newEnd": "<ISO>" }
+ *   entry: { "action": "done" }  |  { "action": "wontdo" }
+ *          { "action": "date", "date": "YYYY-MM-DD" }  (time and range length kept)
  * Items without an action are left alone. Applied items are stamped
  * `applied`, so a re-run never repeats them.
  *
@@ -30,9 +34,10 @@ const path = require("path");
 const GoogleCalendarService = require("../src/services/GoogleCalendarService");
 const { readFileSyncRetry, writeFileSyncRetry } = require("../src/utils/fs-retry");
 const { applyPlannedAction } = require("../src/workflows/planned-event-actions");
-const { todayString, applyTaskAnswers } = require("../src/workflows/reset-today");
+const { todayString, applyTaskAnswers, applyEntryAnswers } = require("../src/workflows/reset-today");
 
 const LIFE_PATH = path.join(__dirname, "..", "data", "life.json");
+const PLAN_PATH = path.join(__dirname, "..", "data", "plan.json");
 const RESET_DIR = path.join(__dirname, "..", "local", "reset");
 const dryRun = process.argv.includes("--dry-run");
 
@@ -64,6 +69,20 @@ async function main() {
     for (const t of reset.tasks) if (done.has(t.n)) t.applied = stamp;
   }
 
+  // Events & trips → data/plan.json
+  const plan = JSON.parse(readFileSyncRetry(PLAN_PATH, "utf-8"));
+  const entryResult = applyEntryAnswers(plan.events, plan.trips, reset.entries);
+
+  console.log(`\nEVENTS & TRIPS → data/plan.json (${entryResult.changes.length})`);
+  for (const c of entryResult.changes) console.log(`  ${String(c.n).padStart(2)}. ${c.title} · ${c.field} ${c.from} → ${c.to}`);
+  for (const s of entryResult.skipped) console.log(`  ${String(s.n).padStart(2)}. ⏭️  ${s.title} — ${s.reason}`);
+
+  if (!dryRun && entryResult.changes.length > 0) {
+    writeFileSyncRetry(PLAN_PATH, JSON.stringify(plan, null, 2));
+    const done = new Set(entryResult.changes.map((c) => c.n));
+    for (const e of reset.entries || []) if (done.has(e.n)) e.applied = stamp;
+  }
+
   // Blocks → main personal calendar
   const answered = (reset.blocks || []).filter((b) => b.action && !b.applied);
   console.log(`\nPLANNED BLOCKS → calendar (${answered.length})`);
@@ -80,11 +99,15 @@ async function main() {
 
   if (!dryRun) fs.writeFileSync(resetPath, JSON.stringify(reset, null, 2) + "\n");
 
-  if (changes.length > 0) {
+  const sections = [
+    ...(changes.length > 0 ? ["tasks"] : []),
+    ...(entryResult.changes.length > 0 ? ["events", "trips"] : []),
+  ].join(",");
+  if (sections) {
     console.log(
       dryRun
-        ? "\nNext: yarn reset:apply (for real), then yarn push --auto --only=tasks --dry-run\n"
-        : "\nNext: yarn push --auto --only=tasks --dry-run, then without --dry-run\n"
+        ? `\nNext: yarn reset:apply (for real), then yarn push --auto --only=${sections} --dry-run\n`
+        : `\nNext: yarn push --auto --only=${sections} --dry-run, then without --dry-run\n`
     );
   } else {
     console.log("");
