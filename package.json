@@ -30,6 +30,8 @@
     "retro:bundle": "node cli/retro-bundle.js",
     "plan:bundle": "node cli/plan-bundle.js",
     "plan:view": "node cli/plan-view.js",
+    "reset:view": "node cli/reset-view.js",
+    "reset:apply": "node cli/reset-apply.js",
     "month:bundle": "node cli/month-bundle.js",
     "month:view": "node cli/month-view.js",
     "goals:view": "node cli/goals-view.js",

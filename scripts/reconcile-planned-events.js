@@ -52,19 +52,15 @@ const fs = require("fs");
 const path = require("path");
 const GoogleCalendarService = require("../src/services/GoogleCalendarService");
 
-const PLANNED_PREFIX = "Planned:";
-const TIME_ZONE = "America/New_York";
-const MAIN_CAL = process.env.PERSONAL_MAIN_CALENDAR_ID;
+const {
+  classify,
+  eventStart,
+  isPlanned,
+  stripPlanned,
+} = require("../src/utils/planned-events");
+const { applyPlannedAction } = require("../src/workflows/planned-event-actions");
 
-// Manual-habit target calendars: manifest carries a key, we resolve the id here
-// so calendar ids never leave .env.
-const TARGET_CALENDARS = {
-  cooking: "COOKING_CALENDAR_ID",
-  reading: "READING_CALENDAR_ID",
-  music: "MUSIC_CALENDAR_ID",
-  art: "ART_CALENDAR_ID",
-  meditation: "MEDITATION_CALENDAR_ID",
-};
+const MAIN_CAL = process.env.PERSONAL_MAIN_CALENDAR_ID;
 
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes("--dry-run");
@@ -89,38 +85,6 @@ function printDisclaimer() {
   );
 }
 
-function isPlanned(summary) {
-  return typeof summary === "string" && summary.trim().startsWith(PLANNED_PREFIX);
-}
-
-/** Strip the leading "Planned:" (and any single following space). */
-function stripPlanned(summary) {
-  return summary.trim().replace(/^Planned:\s*/, "");
-}
-
-/**
- * Best-guess habit classification from the summary. `/retro-week` makes the
- * final call from the habits walk — this is only a hint for the pull dump.
- * `auto` habits are captured elsewhere (Strava/Oura/Steam/GitHub) so their
- * placeholder is always deletable; manual habits get a target calendar.
- */
-function classify(summary) {
-  const body = stripPlanned(summary).toLowerCase();
-  if (/^cook\b|^cook\s*—/.test(body)) return { habitType: "cooking", auto: false, targetKey: "cooking" };
-  if (/^lunch\b/.test(body)) return { habitType: "meal-lunch", auto: false, targetKey: null };
-  if (/^dinner\b/.test(body)) return { habitType: "meal-dinner", auto: false, targetKey: null };
-  if (/early\s*wake/.test(body)) return { habitType: "wakeup", auto: true, targetKey: null };
-  if (/personal training|randy|workout|lift|run\b|stairmaster|skierg|row\b|padel|gym|boxing/.test(body))
-    return { habitType: "workout", auto: true, targetKey: null };
-  if (/video\s*game|gaming|steam/.test(body)) return { habitType: "videogames", auto: true, targetKey: null };
-  if (/cod(e|ing)|brickomations|brickomations|github/.test(body)) return { habitType: "coding", auto: true, targetKey: null };
-  if (/read/.test(body)) return { habitType: "reading", auto: false, targetKey: "reading" };
-  if (/music|guitar/.test(body)) return { habitType: "music", auto: false, targetKey: "music" };
-  if (/meditat/.test(body)) return { habitType: "meditation", auto: false, targetKey: "meditation" };
-  if (/\bart\b|draw|paint|sketch/.test(body)) return { habitType: "art", auto: false, targetKey: "art" };
-  return { habitType: "unknown", auto: false, targetKey: null };
-}
-
 function loadWeekRange(week) {
   const plan = require(path.join(__dirname, "..", "data", "plan.json"));
   const title = `Week ${String(week).padStart(2, "0")}`;
@@ -130,10 +94,6 @@ function loadWeekRange(week) {
   const end = rec["Date Range (SET) End"];
   if (!start || !end) throw new Error(`week "${title}" missing Date Range (SET) / End`);
   return { title, start, end };
-}
-
-function eventStart(ev) {
-  return ev.start && (ev.start.dateTime || ev.start.date);
 }
 
 async function doPull(svc, week) {
@@ -196,14 +156,6 @@ async function doPull(svc, week) {
   console.log("");
 }
 
-/** Re-fetch and confirm the event is still a Planned placeholder before mutating. */
-async function guard(svc, id) {
-  const ev = await svc.getEvent(MAIN_CAL, id);
-  if (!ev) return { ok: false, reason: "not found (already gone?)" };
-  if (!isPlanned(ev.summary)) return { ok: false, reason: `live summary is not Planned: "${ev.summary}"`, ev };
-  return { ok: true, ev };
-}
-
 async function doApply(svc, manifestPath) {
   printDisclaimer();
   const raw = fs.readFileSync(path.resolve(manifestPath), "utf-8");
@@ -215,66 +167,16 @@ async function doApply(svc, manifestPath) {
   let deleted = 0, moved = 0, relabeled = 0, skipped = 0;
 
   for (const item of manifest) {
-    const { id, action, summary = "" } = item;
-    const label = summary || id;
-
-    if (!id || !action) {
-      console.log(`  ⏭️  skip — missing id/action: ${JSON.stringify(item)}`);
+    const { result, message } = await applyPlannedAction(svc, MAIN_CAL, item, { dryRun: DRY_RUN });
+    if (result === "skipped") {
+      console.log(`  ⏭️  SKIP ${message}`);
       skipped++;
       continue;
     }
-
-    const g = await guard(svc, id);
-    if (!g.ok) {
-      console.log(`  ⏭️  SKIP ${label} — ${g.reason}`);
-      skipped++;
-      continue;
-    }
-    const ev = g.ev;
-
-    if (action === "delete") {
-      if (DRY_RUN) console.log(`  🔸 WOULD DELETE  ${ev.summary}`);
-      else { await svc.deleteEvent(MAIN_CAL, id); console.log(`  ✅ DELETED  ${ev.summary}`); }
-      deleted++;
-    } else if (action === "relabel") {
-      if (!item.newSummary) { console.log(`  ⏭️  SKIP relabel ${label} — no newSummary`); skipped++; continue; }
-      if (DRY_RUN) console.log(`  🔸 WOULD RELABEL  ${ev.summary}  →  ${item.newSummary}`);
-      else {
-        await svc.updateEvent(MAIN_CAL, id, {
-          summary: item.newSummary,
-          start: ev.start,
-          end: ev.end,
-          ...(ev.description ? { description: ev.description } : {}),
-          ...(ev.location ? { location: ev.location } : {}),
-        });
-        console.log(`  ✅ RELABELED  ${ev.summary}  →  ${item.newSummary}`);
-      }
-      relabeled++;
-    } else if (action === "move") {
-      const envVar = TARGET_CALENDARS[item.targetKey];
-      const targetId = envVar && process.env[envVar];
-      if (!targetId) { console.log(`  ⏭️  SKIP move ${label} — no target calendar for key "${item.targetKey}"`); skipped++; continue; }
-      const newSummary = item.newSummary || stripPlanned(ev.summary);
-      if (DRY_RUN) console.log(`  🔸 WOULD MOVE  ${ev.summary}  →  ${item.targetKey} cal as "${newSummary}"`);
-      else {
-        await svc.createEvent(targetId, {
-          summary: newSummary,
-          start: ev.start,
-          end: ev.end,
-          ...(ev.description ? { description: ev.description } : {}),
-          ...(ev.location ? { location: ev.location } : {}),
-        });
-        await svc.deleteEvent(MAIN_CAL, id);
-        console.log(`  ✅ MOVED  ${ev.summary}  →  ${item.targetKey} cal as "${newSummary}"`);
-      }
-      moved++;
-    } else if (action === "review") {
-      console.log(`  ⏭️  SKIP ${label} — still "review"; resolve it (move or delete) before applying`);
-      skipped++;
-    } else {
-      console.log(`  ⏭️  SKIP ${label} — unknown action "${action}"`);
-      skipped++;
-    }
+    console.log(`  ${DRY_RUN ? "🔸" : "✅"} ${message}`);
+    if (result === "deleted") deleted++;
+    else if (result === "moved") moved++;
+    else if (result === "relabeled") relabeled++;
   }
 
   console.log(
