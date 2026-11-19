@@ -57,6 +57,7 @@ module.exports = {
     assertEqual(getWorkCategoryKey("🧪 Research"), "research");
     assertEqual(getWorkCategoryKey("💡 Exploration"), null);
     assertEqual(getPersonalCategoryKey("🧪 Research"), "research");
+    assertEqual(getPersonalCategoryKey("✈️ Transit"), "transit");
   },
   "every task option maps to a summary category"() {
     for (const cat of Object.values(WORK_TASK_CATEGORY_MAPPING)) {

@@ -7,7 +7,8 @@
  * PERSONAL Category. Keys must match the Notion option names exactly,
  * emoji included — an unmapped option silently drops the task from the
  * weekly summary. Thu 2026-11-19: 💡 Exploration → ✏️ Whiteboarding, and
- * 🧪 Research added on both sides.
+ * 🧪 Research added on both sides; ✈️ Transit (packing, travel days) mapped
+ * on the personal side.
  */
 
 const TASK_CATEGORY_MAPPING = {
@@ -33,6 +34,7 @@ const PERSONAL_TASK_CATEGORY_MAPPING = {
   "🍗 Cooking": "cooking",
   "💪 Physical Health": "physicalHealth",
   "❤️ Mental Health": "mentalHealth",
+  "✈️ Transit": "transit",
   "🧪 Research": "research",
   "🌱 Admin": "personalAdmin",
 };

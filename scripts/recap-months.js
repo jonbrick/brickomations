@@ -38,6 +38,7 @@ const aggFields = isPersonal
       "Admin Task Details",
       "Hobbies Task Details",
       "Cooking Task Details",
+      "Transit Task Details",
       "Research Task Details",
     ]
   : [

@@ -485,6 +485,10 @@ const CALENDARS = {
         emoji: "🍗",
         dataFields: FIELD_TEMPLATES.taskCategory("cooking", "Cooking"),
       },
+      transit: {
+        emoji: "✈️",
+        dataFields: FIELD_TEMPLATES.taskCategory("transit", "Transit"),
+      },
       research: {
         emoji: "🧪",
         dataFields: FIELD_TEMPLATES.taskCategory("research", "Research"),
@@ -2111,6 +2115,7 @@ const MONTHLY_RECAP_CATEGORIES = {
       // 🎸 Hobbies) — folded in so recaps spanning older weeks keep it.
       hobbies: ["hobbiesTaskDetails", "codingTaskDetails"],
       cooking: ["cookingTaskDetails"],
+      transit: ["transitTaskDetails"],
       research: ["researchTaskDetails"],
     },
   },
@@ -2343,6 +2348,7 @@ const MONTHLY_RECAP_TASK_PROPERTIES = {
     admin: { key: "personalAdminTasks", name: "Admin Task Details" },
     hobbies: { key: "personalHobbiesTasks", name: "Hobbies Task Details" },
     cooking: { key: "personalCookingTasks", name: "Cooking Task Details" },
+    transit: { key: "personalTransitTasks", name: "Transit Task Details" },
     research: { key: "personalResearchTasks", name: "Research Task Details" },
   },
   work: {
