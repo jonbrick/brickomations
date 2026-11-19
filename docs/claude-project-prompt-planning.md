@@ -45,7 +45,7 @@ Almost everything uses the same 6 categories:
 - Physical Health
 - Mental Health
 
-Work items also have Work Categories: Research, Sketch, Design, Coding, Crit, QA, Admin, Social, OOO.
+Work items also have Work Categories: Design, Coding, Whiteboarding, Critique, Research, QA, Hiring & Team, Admin.
 
 ### Time Structure
 

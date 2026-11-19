@@ -304,9 +304,11 @@ MONTHLY_RECAP_CATEGORIES: {
     tasks: {
       design: ["designTaskDetails"],
       research: ["researchTaskDetails"],
-      admin: ["adminTaskDetails"],
+      admin: ["workAdminTaskDetails"],
       coding: ["codingTaskDetails"],
       qa: ["qaTaskDetails"],
+      hiring: ["hiringTaskDetails"],
+      whiteboarding: ["whiteboardingTaskDetails"],
     },
   },
 }

@@ -17,34 +17,53 @@ const PERSONAL_COLOR_MAPPING = {
   11: { category: "mentalHealth", displayName: "Mental Health" }, // Tomato/Red
 };
 
-// Work Calendar Color Mappings (for future use)
-// Maps colorId (string) to category object with category key and display name
-// Color names below match Google's event-color palette (colorId → name) documented
-// at the bottom of this file. colorId 1 (Lavender) is the calendar's default; work
-// events left uncolored arrive as colorId=null and fall through to "meetings".
-// Re-mapped 2026-08-17 to match the relabeled Google Calendar color legend
-// (verified against live events: Design Crit=5, interviews=10, standups=4,
-// A&G Update=9, OpEx iteration=2, Focus Lab=1).
+// Work Calendar event labels → category. The work calendar classifies events
+// by the named labels in Google's color picker. A label's name comes from the
+// calendar (`labelProperties.eventLabels`), matched via the event's
+// `eventLabelId`. Labels outside Google's 11 legacy colors (Whiteboarding)
+// carry no colorId at all, so the name is the primary key. Rename a label in
+// Google Calendar → rename it here.
+const WORK_LABEL_MAPPING = {
+  "Marketing & Branding": "marketing",
+  Design: "design",
+  Coding: "coding",
+  Rituals: "rituals",
+  Critique: "critique",
+  Research: "research",
+  Whiteboarding: "whiteboarding",
+  "Work Admin": "workAdmin",
+  Personal: "personal",
+  "Team & Hiring": "hiring",
+  QA: "qa",
+};
+
+// Work Calendar colorId fallback, for events whose label has no name match.
+// Maps colorId (string) to category object with category key and display name.
+// Color names are Google's legacy palette (bottom of this file); the labels
+// shown in the picker no longer match them. Uncolored work events arrive with
+// neither colorId nor label and fall through to "meetings". colorId 7 has no
+// label and stays unmapped.
+// Re-mapped Thu 2026-11-19 from the calendar's own labels: every 2026 event's
+// colorId paired with its eventLabelId (e.g. bug bashes=11 QA, lunch/DNS=9
+// Personal, "Admin"=8 Work Admin, "Dynamic Colors POC"=3 Coding,
+// "OpEx Wireframing"=6 Exploration & Research → Research).
 const WORK_COLOR_MAPPING = {
-  1: { category: "marketing", displayName: "Marketing & Branding" }, // Lavender (explicitly colored; uncolored events default to Meetings)
+  1: { category: "marketing", displayName: "Marketing & Branding" }, // Lavender
   2: { category: "design", displayName: "Design" }, // Sage
-  3: { category: "marketing", displayName: "Marketing & Branding" }, // Grape (both purples map to marketing; keyword rule also catches uncolored)
+  3: { category: "coding", displayName: "Coding" }, // Grape
   4: { category: "rituals", displayName: "Rituals" }, // Flamingo
   5: { category: "critique", displayName: "Critique" }, // Banana
-  6: { category: "qa", displayName: "QA" }, // Tangerine
-  7: { category: "coding", displayName: "Coding" }, // Peacock
-  8: { category: "personal", displayName: "Personal" }, // Graphite
-  9: { category: "workAdmin", displayName: "Work Admin" }, // Blueberry
-  10: { category: "hiring", displayName: "Hiring" }, // Basil
-  11: { category: "exploration", displayName: "Exploration & Research" }, // Tomato
+  6: { category: "research", displayName: "Research" }, // Tangerine
+  8: { category: "workAdmin", displayName: "Work Admin" }, // Graphite
+  9: { category: "personal", displayName: "Personal" }, // Blueberry
+  10: { category: "hiring", displayName: "Team & Hiring" }, // Basil
+  11: { category: "qa", displayName: "QA" }, // Tomato
 };
 
 // Keyword-based work category overrides (title-driven, color-independent).
-// Google's event palette has only 11 colors and all are assigned above, so a 12th
-// category ("Marketing & Branding") can't be keyed on colorId — these events also
-// arrive uncolored (colorId=null) from the calendar app, which would otherwise
-// bucket them into the "meetings" default. Matched by title before the color lookup.
-// Ordered array: first matching rule wins.
+// Brand work often arrives uncolored (no label, no colorId), which would
+// otherwise bucket it into the "meetings" default. Matched by title before the
+// label and color lookups. Ordered array: first matching rule wins.
 const WORK_KEYWORD_CATEGORIES = [
   {
     category: "marketing",
@@ -202,14 +221,27 @@ function getWorkKeywordCategory(event) {
 }
 
 /**
- * Get the work category for an event, preferring a title-keyword match over color.
- * Keyword rules take precedence so color-less categories (e.g. "marketing") work;
- * everything else falls back to the standard colorId mapping.
- * @param {Object} event - Calendar event with summary and colorId
+ * Get Work Calendar category key by event label name
+ * @param {string|null|undefined} labelName - Event label name (e.g., "Whiteboarding")
+ * @returns {string|null} Category key, or null when the label is unnamed or unmapped
+ */
+function getWorkCategoryByLabel(labelName) {
+  if (!labelName) return null;
+  return WORK_LABEL_MAPPING[labelName] || null;
+}
+
+/**
+ * Get the work category for an event.
+ * Precedence: title keyword > label name > colorId > "meetings".
+ * @param {Object} event - Calendar event with summary, labelName, and colorId
  * @returns {string} Category key
  */
 function getEnhancedWorkCategory(event) {
-  return getWorkKeywordCategory(event) || getWorkCategoryByColor(event.colorId);
+  return (
+    getWorkKeywordCategory(event) ||
+    getWorkCategoryByLabel(event.labelName) ||
+    getWorkCategoryByColor(event.colorId)
+  );
 }
 
 /**
@@ -244,6 +276,7 @@ function getColorIdForNotionEvent(category, type, status) {
 
 module.exports = {
   PERSONAL_COLOR_MAPPING,
+  WORK_LABEL_MAPPING,
   WORK_COLOR_MAPPING,
   EVENTS_TRIPS_CATEGORY_TO_COLOR,
   EVENTS_TRIPS_TYPE_TO_COLOR,
@@ -253,6 +286,7 @@ module.exports = {
   getEnhancedPersonalCategory,
   getWorkCategoryByColor,
   getWorkCategoryDisplayName,
+  getWorkCategoryByLabel,
   getWorkKeywordCategory,
   getEnhancedWorkCategory,
   getColorIdFromNotionCategory,
