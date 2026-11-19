@@ -4,7 +4,11 @@
  *
  * Two-field model (migrated 2026-08-16): Category is the binary
  * (💼 Work / 🌱 Personal); subcategories live in WORK Category and
- * PERSONAL Category (7 options each).
+ * PERSONAL Category. Keys must match the Notion option names exactly,
+ * emoji included — an unmapped option silently drops the task from the
+ * weekly summary. Thu 2026-11-19: 💡 Exploration → ✏️ Whiteboarding, and
+ * 🧪 Research added on both sides; ✈️ Transit (packing, travel days) mapped
+ * on the personal side.
  */
 
 const TASK_CATEGORY_MAPPING = {
@@ -15,7 +19,8 @@ const TASK_CATEGORY_MAPPING = {
 const WORK_TASK_CATEGORY_MAPPING = {
   "🎨 Design": "design",
   "🖥️ Coding": "coding",
-  "💡 Exploration": "exploration",
+  "✏️ Whiteboarding": "whiteboarding",
+  "🧪 Research": "research",
   "🔎 QA": "qa",
   "⚠️ Critique": "critique",
   "🤝 Hiring & Team": "hiring",
@@ -29,6 +34,8 @@ const PERSONAL_TASK_CATEGORY_MAPPING = {
   "🍗 Cooking": "cooking",
   "💪 Physical Health": "physicalHealth",
   "❤️ Mental Health": "mentalHealth",
+  "✈️ Transit": "transit",
+  "🧪 Research": "research",
   "🌱 Admin": "personalAdmin",
 };
 
@@ -61,8 +68,8 @@ function getCategoryKey(taskType) {
 
 /**
  * Get work category key from Work Category property value
- * @param {string|null|undefined} workCategory - Work Category property value (e.g., "💡 Exploration", "📝 Admin")
- * @returns {string|null} Category key (e.g., "exploration", "workAdmin") or null if unmapped
+ * @param {string|null|undefined} workCategory - Work Category property value (e.g., "✏️ Whiteboarding", "💼 Admin")
+ * @returns {string|null} Category key (e.g., "whiteboarding", "workAdmin") or null if unmapped
  */
 function getWorkCategoryKey(workCategory) {
   if (!workCategory) {

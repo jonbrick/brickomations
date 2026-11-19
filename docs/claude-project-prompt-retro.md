@@ -43,7 +43,7 @@ Almost everything uses the same 6 categories:
 - Physical Health
 - Mental Health
 
-Work items also have Work Categories: Research, Sketch, Design, Coding, Crit, QA, Admin, Social, OOO.
+Work items also have Work Categories: Design, Coding, Whiteboarding, Critique, Research, QA, Hiring & Team, Admin.
 
 ### Time Structure
 
@@ -58,7 +58,7 @@ Brickomations auto-generates weekly summaries from Google Calendar data. They co
 - Block details (what calendar events happened in each category)
 - Task completion counts and details
 - Personal summaries track: Personal, Interpersonal, Family, Relationship, Home, Physical Health, Mental Health, Cooking, Workouts, Meditation, Reading, Art, Music, Coding (personal), Gaming
-- Work summaries track: Meetings, Design, Coding, Crit, Sketch, Research, QA, Rituals, Personal & Social, Admin, OOO
+- Work summaries track: Meetings, Design, Coding, Critique, Whiteboarding, Research, QA, Rituals, Marketing & Branding, Hiring, Personal, Work Admin
 
 ### Weekly Retros
 

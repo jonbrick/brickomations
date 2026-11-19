@@ -36,7 +36,10 @@ const aggFields = isPersonal
       "Physical Health Task Details",
       "Mental Health Task Details",
       "Admin Task Details",
-      "Coding Task Details",
+      "Hobbies Task Details",
+      "Cooking Task Details",
+      "Transit Task Details",
+      "Research Task Details",
     ]
   : [
       "Meetings Block Details",
@@ -47,7 +50,7 @@ const aggFields = isPersonal
       "Coding Task Details",
       "QA Task Details",
       "Hiring Task Details",
-      "Sketch Task Details",
+      "Whiteboarding Task Details",
     ];
 
 const now = new Date();

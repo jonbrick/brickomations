@@ -72,6 +72,11 @@ async function fetchCalendarSummary(calendarId, startDate, endDate, options = {}
       endDate
     );
 
+    // Calendars classified by color resolve each event's label name too
+    const labelNames = CALENDARS[calendarKey]?.useEventLabels
+      ? await calendarService.getEventLabels(calendarId)
+      : {};
+
     if (!events || events.length === 0) {
       return [];
     }
@@ -143,6 +148,7 @@ async function fetchCalendarSummary(calendarId, startDate, endDate, options = {}
           startDateTime: startDateTime ? startDateTime.toISOString() : null,
           endDateTime: endDateTime ? endDateTime.toISOString() : null,
           colorId: event.colorId || null,
+          labelName: labelNames[event.eventLabelId] || null,
           isAllDayEvent,
         };
       })

@@ -361,6 +361,7 @@ const CALENDARS = {
     ignoreDeclinedEvents: true,
     ignoreAllDayEvents: true,
     id: "workCalendar",
+    useEventLabels: true,
     envVar: "WORK_MAIN_CALENDAR_ID",
     name: "Work Calendar",
     emoji: "📅",
@@ -385,12 +386,16 @@ const CALENDARS = {
         emoji: "⚠️",
         dataFields: FIELD_TEMPLATES.categoryActivity("critique", "Critique"),
       },
-      exploration: {
-        emoji: "💡",
+      whiteboarding: {
+        emoji: "✏️",
         dataFields: FIELD_TEMPLATES.categoryActivity(
-          "exploration",
-          "Exploration",
+          "whiteboarding",
+          "Whiteboarding",
         ),
+      },
+      research: {
+        emoji: "🧪",
+        dataFields: FIELD_TEMPLATES.categoryActivity("research", "Research"),
       },
       personal: {
         emoji: "🌱",
@@ -480,6 +485,14 @@ const CALENDARS = {
         emoji: "🍗",
         dataFields: FIELD_TEMPLATES.taskCategory("cooking", "Cooking"),
       },
+      transit: {
+        emoji: "✈️",
+        dataFields: FIELD_TEMPLATES.taskCategory("transit", "Transit"),
+      },
+      research: {
+        emoji: "🧪",
+        dataFields: FIELD_TEMPLATES.taskCategory("research", "Research"),
+      },
     },
   },
   workTasks: {
@@ -489,9 +502,16 @@ const CALENDARS = {
     emoji: "💼",
     dataFields: [],
     categories: {
-      exploration: {
-        emoji: "💡",
-        dataFields: FIELD_TEMPLATES.taskCategory("exploration", "Exploration"),
+      whiteboarding: {
+        emoji: "✏️",
+        dataFields: FIELD_TEMPLATES.taskCategory(
+          "whiteboarding",
+          "Whiteboarding",
+        ),
+      },
+      research: {
+        emoji: "🧪",
+        dataFields: FIELD_TEMPLATES.taskCategory("research", "Research"),
       },
       design: {
         emoji: "🎨",
@@ -2095,6 +2115,8 @@ const MONTHLY_RECAP_CATEGORIES = {
       // 🎸 Hobbies) — folded in so recaps spanning older weeks keep it.
       hobbies: ["hobbiesTaskDetails", "codingTaskDetails"],
       cooking: ["cookingTaskDetails"],
+      transit: ["transitTaskDetails"],
+      research: ["researchTaskDetails"],
     },
   },
   work: {
@@ -2109,7 +2131,7 @@ const MONTHLY_RECAP_CATEGORIES = {
       coding: ["codingTaskDetails"],
       qa: ["qaTaskDetails"],
       hiring: ["hiringTaskDetails"],
-      sketch: ["explorationTaskDetails"],
+      whiteboarding: ["whiteboardingTaskDetails"],
     },
   },
 };
@@ -2191,8 +2213,8 @@ const CONTENT_FILTERS = {
       // meetingsBlocks: [],
       // designBlocks: [],
       // codingBlocks: [],
-      // critBlocks: [],
-      // sketchBlocks: [],
+      // critiqueBlocks: [],
+      // whiteboardingBlocks: [],
       // researchBlocks: [],
       // Filter-out-words
       personalBlocks: ["lunch"],
@@ -2201,10 +2223,10 @@ const CONTENT_FILTERS = {
       // adminBlocks: [],
       // Work task category details
       // researchTaskDetails: [],
-      // sketchTaskDetails: [],
+      // whiteboardingTaskDetails: [],
       // designTaskDetails: [],
       // codingTaskDetails: [],
-      // critTaskDetails: [],
+      // critiqueTaskDetails: [],
       // qaTaskDetails: [],
       // hiringTaskDetails: [],
       // adminTaskDetails: [],
@@ -2268,6 +2290,7 @@ const CONTENT_FILTERS = {
       // Task columns
       // workDesignTasks: [],
       // workResearchTasks: [],
+      // workWhiteboardingTasks: [],
       // workAdminTasks: [],
       // workCodingTasks: [],
       // workQATasks: [],
@@ -2325,6 +2348,8 @@ const MONTHLY_RECAP_TASK_PROPERTIES = {
     admin: { key: "personalAdminTasks", name: "Admin Task Details" },
     hobbies: { key: "personalHobbiesTasks", name: "Hobbies Task Details" },
     cooking: { key: "personalCookingTasks", name: "Cooking Task Details" },
+    transit: { key: "personalTransitTasks", name: "Transit Task Details" },
+    research: { key: "personalResearchTasks", name: "Research Task Details" },
   },
   work: {
     design: { key: "workDesignTasks", name: "Design Task Details" },
@@ -2333,7 +2358,10 @@ const MONTHLY_RECAP_TASK_PROPERTIES = {
     coding: { key: "workCodingTasks", name: "Coding Task Details" },
     qa: { key: "workQATasks", name: "QA Task Details" },
     hiring: { key: "workHiringTasks", name: "Hiring Task Details" },
-    sketch: { key: "workSketchTasks", name: "Sketch Task Details" },
+    whiteboarding: {
+      key: "workWhiteboardingTasks",
+      name: "Whiteboarding Task Details",
+    },
   },
 };
 

@@ -27,8 +27,8 @@ Formerly "2026 Themes" (renamed 2026-11-11).
 | Name | title | |
 | Status | status | "🧊 Ice Box", "⏸️ Blocked", "🟣 Considering", "🔴 To Do", "🟠 To Book", "🟡 Scheduled", "🔵 Doing", "🟢 Done", "↗️ Next Year", "❌ Cancelled" |
 | Category | select | "💼 Work", "🌱 Personal" |
-| PERSONAL Category | select | "🎸 Hobbies", "🍻 Interpersonal", "🏠 Home", "💪 Physical Health", "❤️ Mental Health", "🍗 Cooking", "🌱 Admin" |
-| WORK Category | select | "🎨 Design", "🖥️ Coding", "💡 Exploration", "⚠️ Critique", "🔎 QA", "🤝 Hiring & Team", "💼 Admin" |
+| PERSONAL Category | select | "🎸 Hobbies", "🍻 Interpersonal", "🏠 Home", "💪 Physical Health", "❤️ Mental Health", "🍗 Cooking", "✈️ Transit", "🧪 Research", "🌱 Admin" |
+| WORK Category | select | "🎨 Design", "🖥️ Coding", "✏️ Whiteboarding", "⚠️ Critique", "🧪 Research", "🔎 QA", "🤝 Hiring & Team", "💼 Admin" |
 | Clarifying Statement | text | What done looks like |
 | Outcome | text | The "so that" — read with Clarifying Statement via the `Goal Statement` formula |
 | Goal Date | date | |
@@ -50,8 +50,9 @@ Formerly "2026 Themes" (renamed 2026-11-11).
 | Rock | title | |
 | Status | status | "⏸️ Blocked", "🔴 To Do", "🔵 Doing", "🟢 Done" |
 | Retro | status | "❓ Not Ranked", "⚫️ N/A", "🔴 Failed", "🔵 Progress", "🟢 Achieved" |
-| Category | select | "💼 Work", "🌱 Personal", "🍻 Interpersonal", "🏠 Home", "💪 Physical Health", "❤️ Mental Health", "🫥 N/A" |
-| Work Category | select | "🧪 Research", "💡 Sketch", "🎨 Design", "🖥️ Coding", "⚠️ Crit", "🔎 QA", "📝 Admin", "🍸 Social", "🏝️ OOO", "🫥 N/A" |
+| Category | select | "💼 Work", "🌱 Personal", "🫥 N/A" |
+| Personal Category | select | "🎸 Hobbies", "🍻 Interpersonal", "🏠 Home", "💪 Physical Health", "❤️ Mental Health", "🍗 Cooking", "🧪 Research", "🌱 Admin" |
+| Work Category | select | "🎨 Design", "🖥️ Coding", "✏️ Whiteboarding", "⚠️ Critique", "🧪 Research", "🔎 QA", "🤝 Hiring", "💼 Admin", "🫥 N/A" |
 | Description | text | |
 | Date | date | |
 | ⏰ 2026 Weeks | relation | → Weeks database (single) |
@@ -63,9 +64,9 @@ Formerly "2026 Themes" (renamed 2026-11-11).
 |----------|------|--------|
 | Task | title | |
 | Status | status | "🧊 Ice Box", "🔴 To Do", "🟡 Scheduled", "🔵 Doing", "🟢 Done" |
-| Category | select | "💼 Work", "🌱 Personal", "🍻 Interpersonal", "🏠 Home", "💪 Physical Health", "❤️ Mental Health" |
-| Work Category | select | "🧪 Research", "💡 Sketch", "🎨 Design", "🖥️ Coding", "⚠️ Crit", "🔎 QA", "📝 Admin", "🍸 Social", "🏝️ OOO" |
-| Personal Category | select | "💻 Coding", "📝 Admin" |
+| Category | select | "💼 Work", "🌱 Personal" |
+| WORK Category | select | "🎨 Design", "🖥️ Coding", "✏️ Whiteboarding", "⚠️ Critique", "🧪 Research", "🔎 QA", "🤝 Hiring & Team", "💼 Admin" |
+| PERSONAL Category | select | "🎸 Hobbies", "🍻 Interpersonal", "🏠 Home", "💪 Physical Health", "❤️ Mental Health", "🍗 Cooking", "✈️ Transit", "🧪 Research", "🌱 Admin" |
 | Due Date | date | **Use this to filter tasks by date** |
 | Notes | text | |
 | Priority | text | |

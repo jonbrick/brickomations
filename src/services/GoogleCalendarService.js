@@ -62,6 +62,31 @@ class GoogleCalendarService {
   }
 
   /**
+   * Get a calendar's event labels (the named colors in the event color picker)
+   *
+   * Labels past Google's 11 legacy colors carry no `colorId` on the event —
+   * only `eventLabelId` — so the label name is the only way to classify them.
+   *
+   * @param {string} calendarId - Calendar ID
+   * @returns {Promise<Object>} Map of label id → label name (unnamed labels omitted)
+   */
+  async getEventLabels(calendarId) {
+    try {
+      const response = await this.calendar.calendars.get({ calendarId });
+      const labels = response.data.labelProperties?.eventLabels || [];
+      return Object.fromEntries(
+        labels.filter((l) => l.name).map((l) => [l.id, l.name])
+      );
+    } catch (error) {
+      throw new Error(
+        `Failed to get event labels: ${
+          error.response?.data?.error?.message || error.message
+        }`
+      );
+    }
+  }
+
+  /**
    * Create a calendar event
    *
    * @param {string} calendarId - Calendar ID

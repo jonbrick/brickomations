@@ -11,8 +11,8 @@
  * - Notion Database: Personal Tasks (TASKS_DATABASE_ID)
  *
  * Work Summary:
- * - Google Calendar: Work Calendar (meetings, design, coding, crit, sketch, research,
- *   personalAndSocial, rituals, qa), Work PRs
+ * - Google Calendar: Work Calendar (meetings, design, coding, critique, whiteboarding,
+ *   research, personal, rituals, qa, hiring, workAdmin, marketing), Work PRs
  * - Notion Database: Work Tasks (TASKS_DATABASE_ID, filtered by Category = "💼 Work")
  */
 
