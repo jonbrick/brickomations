@@ -28,6 +28,7 @@ const dailyRecords = require("./daily-records");
 const rocks = require("./rocks");
 const linearTasks = require("./linear-tasks");
 const linearProjects = require("./linear-projects");
+const linearProjectUpdates = require("./linear-project-updates");
 const nycMuseums = require("./nyc-museums");
 const nycRestaurants = require("./nyc-restaurants");
 const nycTattoos = require("./nyc-tattoos");
@@ -60,6 +61,7 @@ const databases = {
   rocks: rocks.database,
   linearTasks: linearTasks.database,
   linearProjects: linearProjects.database,
+  linearProjectUpdates: linearProjectUpdates.database,
   nycMuseums: nycMuseums.database,
   nycRestaurants: nycRestaurants.database,
   nycTattoos: nycTattoos.database,
@@ -93,6 +95,7 @@ const properties = {
   rocks: rocks.properties,
   linearTasks: linearTasks.properties,
   linearProjects: linearProjects.properties,
+  linearProjectUpdates: linearProjectUpdates.properties,
   nycMuseums: nycMuseums.properties,
   nycRestaurants: nycRestaurants.properties,
   nycTattoos: nycTattoos.properties,

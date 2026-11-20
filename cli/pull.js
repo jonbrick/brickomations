@@ -51,6 +51,7 @@ const LIFE_DATABASES = {
   personalMonthlyPlans: { envVar: "PERSONAL_MONTHLY_PLAN_DATABASE_ID", label: "Personal Monthly Plans" },
   workMonthlyPlans: { envVar: "WORK_MONTHLY_PLAN_DATABASE_ID", label: "Work Monthly Plans" },
   personalProjects: { envVar: "NOTION_PERSONAL_PROJECTS_DATABASE_ID", label: "Personal Projects" },
+  projectUpdates: { envVar: "NOTION_PROJECT_UPDATES_DATABASE_ID", label: "Project Updates" },
 };
 
 // Ensure directories exist
@@ -374,53 +375,12 @@ async function pullLifeData(spinner) {
   // vault-sync can mirror the whole brief — properties + body — to
   // brickography without a Notion call of its own. Work rows are skipped:
   // their bodies belong to the Linear → Notion sync.
-  if (Array.isArray(life.personalProjects) && life.personalProjects.length > 0) {
-    const previousProjects = {};
-    if (Array.isArray(existingLife?.personalProjects)) {
-      for (const p of existingLife.personalProjects) {
-        if (p._notionId) previousProjects[p._notionId] = p;
-      }
-    }
-    const emptyHash = crypto.createHash("md5").update("").digest("hex");
+  await attachBodies(spinner, life, existingLife, "personalProjects", "Personal project bodies", (p) =>
+    (p.Category || "") === "🌱 Personal"
+  );
 
-    spinner.start();
-    let fetched = 0;
-    let skipped = 0;
-    for (const project of life.personalProjects) {
-      if ((project.Category || "") !== "🌱 Personal") continue;
-      const prev = previousProjects[project._notionId];
-
-      if (
-        prev &&
-        prev._notionEditedTime &&
-        project._notionEditedTime === prev._notionEditedTime &&
-        typeof prev._content === "string"
-      ) {
-        project._content = prev._content;
-        project._contentHash = prev._contentHash || emptyHash;
-        project._hash = computeHash(project);
-        skipped++;
-        continue;
-      }
-
-      try {
-        const blocks = await db.getPageBlocks(project._notionId);
-        project._content = blocksToMarkdown(blocks) || "";
-        project._contentHash = crypto.createHash("md5").update(project._content).digest("hex");
-        project._hash = computeHash(project);
-        fetched++;
-        await delay(config.sources.rateLimits.notion.backoffMs);
-      } catch (error) {
-        project._content = prev?._content || "";
-        project._contentHash = prev?._contentHash || emptyHash;
-        project._hash = computeHash(project);
-        if (process.env.DEBUG) {
-          console.error(`  ⚠ Failed to fetch body for project ${project._notionId}: ${error.message}`);
-        }
-      }
-    }
-    spinner.stop(`  ✓ Personal project bodies: ${fetched} fetched, ${skipped} unchanged`);
-  }
+  // Project-update bodies are the post itself — the point of the row.
+  await attachBodies(spinner, life, existingLife, "projectUpdates", "Project update bodies");
 
   ensureDir(DATA_DIR);
   writeFileSyncRetry(
@@ -438,6 +398,63 @@ async function pullLifeData(spinner) {
  * logic in IntegrationDatabase.getAllInDateRange so the same key works on both
  * sides.
  */
+/**
+ * Attach `_content` (page body as markdown) to the life.json records in
+ * `life[key]`, re-fetching only rows edited since the last pull (same
+ * delta rule as tasks). A failed fetch keeps the previous body. `include`
+ * limits which rows get a body; the rest are left as they are.
+ */
+async function attachBodies(spinner, life, existingLife, key, label, include = () => true) {
+  const records = life[key];
+  if (!Array.isArray(records) || records.length === 0) return;
+
+  const previous = {};
+  if (Array.isArray(existingLife?.[key])) {
+    for (const r of existingLife[key]) {
+      if (r._notionId) previous[r._notionId] = r;
+    }
+  }
+  const emptyHash = crypto.createHash("md5").update("").digest("hex");
+
+  spinner.start();
+  let fetched = 0;
+  let skipped = 0;
+  for (const record of records) {
+    if (!include(record)) continue;
+    const prev = previous[record._notionId];
+
+    if (
+      prev &&
+      prev._notionEditedTime &&
+      record._notionEditedTime === prev._notionEditedTime &&
+      typeof prev._content === "string"
+    ) {
+      record._content = prev._content;
+      record._contentHash = prev._contentHash || emptyHash;
+      record._hash = computeHash(record);
+      skipped++;
+      continue;
+    }
+
+    try {
+      const blocks = await db.getPageBlocks(record._notionId);
+      record._content = blocksToMarkdown(blocks) || "";
+      record._contentHash = crypto.createHash("md5").update(record._content).digest("hex");
+      record._hash = computeHash(record);
+      fetched++;
+      await delay(config.sources.rateLimits.notion.backoffMs);
+    } catch (error) {
+      record._content = prev?._content || "";
+      record._contentHash = prev?._contentHash || emptyHash;
+      record._hash = computeHash(record);
+      if (process.env.DEBUG) {
+        console.error(`  ⚠ Failed to fetch body for ${key} ${record._notionId}: ${error.message}`);
+      }
+    }
+  }
+  spinner.stop(`  ✓ ${label}: ${fetched} fetched, ${skipped} unchanged`);
+}
+
 function resolveDatePropertyName(integrationDb) {
   const key = integrationDb.databaseConfig?.dateProperty;
   if (!key) return null;

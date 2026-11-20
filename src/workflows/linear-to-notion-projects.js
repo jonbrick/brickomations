@@ -5,7 +5,9 @@
 //
 // Field ownership — the sync owns columns, not rows:
 //   - Sync-owned, overwritten every run: Project (title, verbatim from
-//     Linear), Status, Date, Priority, Linear ID, Linear URL, Description
+//     Linear), Status, Date, Priority, Linear Lead (the lead's Linear display
+//     name — the only way to tell Jon's projects from teammates'), Linear
+//     ID, Linear URL, Description
 //     (Linear's short summary metadata), the page BODY (Linear's project
 //     overview doc, converted markdown → blocks), and the page ICON
 //     (emoji by team — 🎨 PD/DSGN, 🏗️ DE; projects only, tasks get none).
@@ -25,8 +27,8 @@
 //   - Status maps by Linear project state *type* (never status name —
 //     project statuses are customized per project: "In Design", "Duplicate")
 //     onto the existing 2026 Projects option set.
-//   - Rows whose Linear ID is absent from the pull (archived, or Jon
-//     removed from the project) get Status 🫥 Gone — unless already settled
+//   - Rows whose Linear ID is absent from the pull (archived, or out of
+//     scope — e.g. a DE project Jon no longer leads) get Status 🫥 Gone — unless already settled
 //     (🟢 Done / ❌ Canceled rows stay as they are). Rows are never
 //     deleted — retiring one is a manual [DELETE] pass.
 //   - Read-only sync: no write-back to Linear, ever.
@@ -115,6 +117,7 @@ function syncedValues(project) {
     "Date Start": start,
     "Date End": end,
     Priority: PRIORITY_MAP[project.Priority] || "",
+    "Linear Lead": project.Lead || "",
     "Linear ID": project.Id,
     "Linear URL": project.URL,
     Description: project.Description || "",
@@ -132,6 +135,7 @@ function currentValues(db, page) {
     // that back to "" so single-date rows compare equal to single-date pulls.
     "Date End": range && range.end !== range.start ? range.end : "",
     Priority: db.extractProperty(page, "Priority") || "",
+    "Linear Lead": db.extractProperty(page, "Linear Lead") || "",
     "Linear ID": db.extractProperty(page, "Linear ID") || "",
     "Linear URL": db.extractProperty(page, "Linear URL") || "",
     Description: db.extractProperty(page, "Description") || "",
@@ -154,6 +158,9 @@ function toPayload(values) {
         : null,
     },
     Priority: { select: values.Priority ? { name: values.Priority } : null },
+    "Linear Lead": {
+      select: values["Linear Lead"] ? { name: values["Linear Lead"] } : null,
+    },
     "Linear ID": { rich_text: [{ text: { content: values["Linear ID"] } }] },
     "Linear URL": { url: values["Linear URL"] },
     Description: { rich_text: chunkRichText(values.Description) },
@@ -172,7 +179,7 @@ function changedFields(current, values) {
 
 /**
  * @param {Array} projects - Project records from pull-linear's
- *   toAssignedProjectRecord
+ *   toProjectRecord
  * @param {{dryRun?: boolean}} [opts] - dryRun reads Notion and reports the
  *   plan (counts + actions) without writing a thing.
  * @returns {Promise<{created: number, updated: number, gone: number, unchanged: number, actions: string[]}>}
@@ -298,4 +305,8 @@ async function syncLinearProjects(projects, opts = {}) {
   return counts;
 }
 
-module.exports = { syncLinearProjects };
+module.exports = {
+  syncLinearProjects,
+  // Exported for tests.
+  syncedValues,
+};

@@ -686,7 +686,7 @@ class NotionDatabase {
         };
       } else if (typeof value === "object") {
         // Check if it's already a Notion API-formatted property
-        const notionPropertyKeys = ['status', 'select', 'title', 'date', 'number', 'checkbox', 'rich_text', 'url', 'multi_select'];
+        const notionPropertyKeys = ['status', 'select', 'title', 'date', 'number', 'checkbox', 'rich_text', 'url', 'multi_select', 'relation'];
         const hasNotionPropertyKey = Object.keys(value).some(key => notionPropertyKeys.includes(key));
         
         if (hasNotionPropertyKey) {

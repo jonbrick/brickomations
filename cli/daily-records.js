@@ -136,8 +136,7 @@ function toBlocks(markdown) {
   return chunks.map(paragraphBlock);
 }
 
-// ---- Notion body ops (raw client — NotionDatabase has no block methods,
-// and its _formatProperties silently drops relation payloads) -------------
+// ---- Notion body ops (raw client — NotionDatabase has no block methods) --
 
 async function appendBody(client, pageId, blocks) {
   for (let i = 0; i < blocks.length; i += BLOCKS_PER_CALL) {

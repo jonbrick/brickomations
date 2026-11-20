@@ -3,11 +3,12 @@
 /**
  * Pull Linear CLI
  *
- * The Linear → Notion collector: upserts assigned issues and assigned
- * projects (lead or member, any state) — both scoped to the
- * LINEAR_PROJECT_TEAM_KEYS teams — into the shared 2026 Tasks and 2026
- * Projects DBs, so Notion is the one holistic layer for phone-side
- * retro/planning.
+ * The Linear → Notion collector: upserts assigned issues (scoped to the
+ * LINEAR_PROJECT_TEAM_KEYS teams) and in-scope projects (any state) into
+ * the shared 2026 Tasks and 2026 Projects DBs, so Notion is the one
+ * holistic layer for phone-side retro/planning. Project scope: every
+ * project whose only team is a whole-team key (PD), plus any other
+ * configured-team project Jon leads (DE).
  *
  * Also writes ONE local JSON, data/linearTeam.json — the design-team
  * view Notion deliberately doesn't carry: issues assigned to the
@@ -26,8 +27,14 @@
  * Fail loud, never partial: the Notion sync runs only after every fetch
  * has succeeded; any error pings the heartbeat as failed and exits 1.
  *
- * Usage: yarn pull:linear [--dry-run] [--tasks-only]
+ * Also upserts every project-update post (any author) on those in-scope
+ * projects into the 📣 2026 Project Updates DB (one row per post, related
+ * to its 2026 Projects row) — last 14 days on a scheduled run; `yarn pull`
+ * brings them down to data/life.json (`projectUpdates`).
+ *
+ * Usage: yarn pull:linear [--dry-run] [--tasks-only | --updates-only]
  *                         [--days=N | --from=YYYY-MM-DD --to=YYYY-MM-DD | --date=YYYY-MM-DD]
+ *                         [--updates-since=YYYY-MM-DD]
  *
  * --dry-run reads Linear and Notion, prints the would-be Notion actions
  * (creates/updates/gone), and writes nothing — no Notion writes, no
@@ -40,6 +47,17 @@
  * pull-linear heartbeat attests the full scheduled job, and a partial
  * manual run must not vouch for legs it skipped. Behind yarn linear:week
  * (--days=8) and yarn linear:range (append --from=/--to=).
+ *
+ * --updates-only runs just the project-updates → Notion leg (the in-scope
+ * projects are read to scope and relate the posts, never written): no
+ * tasks or projects sync, no team cache write, no heartbeat ping. The
+ * backfill / test path: `yarn pull:linear --updates-only
+ * --updates-since=2026-01-01`. A post on a project the 2026 Projects DB
+ * doesn't have yet lands with an empty relation — the next full pull
+ * fills it.
+ *
+ * --updates-since=YYYY-MM-DD widens the project-updates window from the
+ * 14-day default to every post since that date (NY-local midnight).
  *
  * Settled window — which completed / canceled issues come along (open
  * issues always do, so the Notion gone-pass stays safe at any width):
@@ -65,6 +83,9 @@ const { syncLinearTasks } = require("../src/workflows/linear-to-notion-tasks");
 const {
   syncLinearProjects,
 } = require("../src/workflows/linear-to-notion-projects");
+const {
+  syncLinearProjectUpdates,
+} = require("../src/workflows/linear-to-notion-project-updates");
 const { readFileSyncRetry } = require("../src/utils/fs-retry");
 const { parseDateRangeFromArgv } = require("../src/utils/cli");
 
@@ -74,6 +95,7 @@ const HEARTBEAT_SCRIPT = path.join(REPO_ROOT, "scripts", "heartbeat-ping.sh");
 const JOB_NAME = "pull-linear";
 const DRY_RUN = process.argv.includes("--dry-run");
 const TASKS_ONLY = process.argv.includes("--tasks-only");
+const UPDATES_ONLY = process.argv.includes("--updates-only");
 
 const COMPLETED_WINDOW_DAYS = 21;
 // Rolling window for the viewer's own comments in the local team cache —
@@ -84,6 +106,15 @@ const COMMENT_WINDOW_DAYS = 35;
 // recap run well into the following month. Low volume (a few posts per
 // project per month), so the width costs nothing.
 const PROJECT_UPDATE_WINDOW_DAYS = 90;
+// Rolling window for the project-updates → Notion leg. Rows outside it are
+// never touched, so this only bounds how late an edit in Linear still
+// reaches Notion; posts are never future-dated. --updates-since widens it.
+const PROJECT_UPDATES_SYNC_DAYS = 14;
+// Teams whose projects all come into 2026 Projects — but only projects
+// owned by these teams alone; a cross-team project that merely lists PD is
+// another team's work. Any other LINEAR_PROJECT_TEAM_KEYS team (DE) only
+// contributes the projects Jon leads.
+const WHOLE_TEAM_KEYS = ["PD"];
 const TEAM_CACHE_FILE = path.join(DATA_DIR, "linearTeam.json");
 // Bounded runtime: the per-job wakelock lasts as long as the process, so a
 // hung API call must not hold the mini awake. A handful of GraphQL pages
@@ -129,12 +160,43 @@ function resolveSettledWindow(argv) {
   };
 }
 
+/**
+ * Cutoff (ISO datetime) for the project-updates leg: --updates-since=
+ * YYYY-MM-DD (start of that NY-local day), or the 14-day default.
+ */
+function resolveUpdatesCutoff(argv) {
+  const arg = argv.find((a) => a.startsWith("--updates-since="));
+  if (!arg) {
+    return {
+      cutoff: new Date(
+        Date.now() - PROJECT_UPDATES_SYNC_DAYS * 24 * 60 * 60 * 1000
+      ).toISOString(),
+      label: `last ${PROJECT_UPDATES_SYNC_DAYS} days`,
+    };
+  }
+  const day = arg.slice("--updates-since=".length);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(day))) {
+    throw new Error(`Invalid --updates-since value: "${day}". Expected YYYY-MM-DD.`);
+  }
+  // Noon UTC on that day is always the same NY date; back off to NY midnight.
+  const noonUtc = new Date(`${day}T12:00:00Z`);
+  const nyHour = Number(
+    noonUtc.toLocaleString("en-US", {
+      timeZone: "America/New_York",
+      hour: "numeric",
+      hour12: false,
+    })
+  );
+  const nyMidnight = new Date(noonUtc.getTime() - nyHour * 60 * 60 * 1000);
+  return { cutoff: nyMidnight.toISOString(), label: `since ${day}` };
+}
+
 // --- Heartbeat ---
 
 function pingHeartbeat(status, message) {
   // A rehearsal is not a run, and a tasks-only run skips legs the heartbeat
   // attests — neither may touch it.
-  if (DRY_RUN || TASKS_ONLY) return;
+  if (DRY_RUN || TASKS_ONLY || UPDATES_ONLY) return;
   try {
     const args = [JOB_NAME, status];
     if (message) args.push(message);
@@ -181,7 +243,7 @@ function weekNumberFor(dueDate, weeks) {
  * sync writes. Linear ID is the project UUID — projects have no
  * DSGN-123-style identifier.
  */
-function toAssignedProjectRecord(node) {
+function toProjectRecord(node) {
   return {
     Id: node.id,
     Name: node.name,
@@ -195,6 +257,9 @@ function toAssignedProjectRecord(node) {
     // on the Notion side — Linear is the source of truth for work projects.
     Description: node.description || "",
     Content: node.content || "",
+    // Linear display name of the project lead ("" when unassigned) — tells
+    // Jon's projects from teammates' in every Notion/local view.
+    Lead: node.lead ? node.lead.name : "",
     // A Linear project belongs to a teams *list* — kept whole so the sync
     // can seed Work Category from the first mapped key.
     Teams: (node.teams?.nodes || []).map((t) => t.key),
@@ -309,13 +374,105 @@ function toProjectUpdateRecord(node, weeks, viewerEmail) {
   };
 }
 
+/**
+ * One project-update post, for the 📣 2026 Project Updates upsert. Date
+ * is the NY-local post date (a late-evening post belongs to the day it was
+ * written); Changes is Linear's diff list on the post.
+ */
+function toProjectUpdateSyncRecord(node) {
+  return {
+    Id: node.id,
+    Project: node.project.name,
+    "Project Id": node.project.id,
+    Author: node.user ? node.user.name : "",
+    Date: nyDate(node.createdAt),
+    Health: node.health || "",
+    Changes: node.diffMarkdown || "",
+    Body: node.body || "",
+    URL: node.url,
+    "Created At": node.createdAt || "",
+  };
+}
+
+/** The 2026 Projects scope rule — see WHOLE_TEAM_KEYS. */
+function inProjectScope(node, viewerId, teamKeys) {
+  const keys = (node.teams?.nodes || []).map((t) => t.key);
+  if (keys.length > 0 && keys.every((k) => WHOLE_TEAM_KEYS.includes(k))) {
+    return true;
+  }
+  return node.lead?.id === viewerId && keys.some((k) => teamKeys.includes(k));
+}
+
+/** In-scope projects (all states) on the configured teams. */
+async function fetchScopedProjects(linear, viewer, teamKeys) {
+  const nodes = await linear.getProjectsOnTeams(teamKeys);
+  const scoped = nodes.filter((node) => inProjectScope(node, viewer.id, teamKeys));
+  console.log(
+    `  ✓ ${scoped.length} in-scope projects (all ${WHOLE_TEAM_KEYS.join("/")}-only ` +
+      `projects + the rest I lead, all states; ${nodes.length} on ${teamKeys.join("/")} overall)`
+  );
+  return scoped.map(toProjectRecord).sort((a, b) => a.Name.localeCompare(b.Name));
+}
+
+/**
+ * Every project-update post inside the window on the projects the pull
+ * syncs, any author. Oldest first so a backfill creates rows in posting
+ * order.
+ */
+async function fetchProjectUpdates(linear, projects) {
+  const { cutoff, label } = resolveUpdatesCutoff(process.argv);
+  const nodes = (
+    await linear.getProjectUpdatesOnProjects(projects.map((p) => p.Id), cutoff)
+  ).filter((node) => node.project);
+  const records = nodes
+    .map(toProjectUpdateSyncRecord)
+    .sort((a, b) => a["Created At"].localeCompare(b["Created At"]));
+  console.log(`  ✓ ${records.length} project updates on in-scope projects (${label})`);
+  return records;
+}
+
+function logUpdatesPlan(sync) {
+  console.log(
+    `\n[dry-run] project updates plan: ${sync.created} create, ` +
+      `${sync.updated} update, ${sync.unchanged} unchanged` +
+      (sync.unlinked ? `, ${sync.unlinked} without a 2026 Projects row` : "")
+  );
+  for (const action of sync.actions) console.log(`  ${action}`);
+}
+
+function updatesSummary(sync) {
+  return (
+    `${sync.created} created, ${sync.updated} updated, ${sync.unchanged} unchanged` +
+    (sync.unlinked ? `, ${sync.unlinked} without a 2026 Projects row` : "")
+  );
+}
+
+/** --updates-only: the project-updates leg alone (backfill / test path). */
+async function runUpdatesOnly(linear, viewer, teamKeys) {
+  const projects = await fetchScopedProjects(linear, viewer, teamKeys);
+  const updates = await fetchProjectUpdates(linear, projects);
+  if (DRY_RUN) {
+    logUpdatesPlan(await syncLinearProjectUpdates(updates, { dryRun: true }));
+    console.log("\n[dry-run] nothing written");
+    return;
+  }
+  const sync = await syncLinearProjectUpdates(updates);
+  console.log(`✅ Notion 2026 Project Updates synced (${updatesSummary(sync)})`);
+  console.log("[updates-only] skipped: tasks, projects sync, team cache, heartbeat");
+}
+
 // --- Main ---
 
 async function main() {
+  if (TASKS_ONLY && UPDATES_ONLY) {
+    throw new Error("--tasks-only and --updates-only are mutually exclusive.");
+  }
   console.log(
     TASKS_ONLY
       ? "[pull-linear] pulling assigned issues (tasks-only)"
-      : "[pull-linear] pulling Linear projects + assigned issues"
+      : UPDATES_ONLY
+        ? "[pull-linear] pulling project updates (updates-only)"
+        : "[pull-linear] pulling Linear projects + assigned issues + project updates"
   );
 
   const teamKeys = (process.env.LINEAR_PROJECT_TEAM_KEYS || "")
@@ -332,9 +489,17 @@ async function main() {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  if (!TASKS_ONLY && rosterEmails.length === 0) {
+  if (!TASKS_ONLY && !UPDATES_ONLY && rosterEmails.length === 0) {
     throw new Error(
       "LINEAR_DESIGN_TEAM_EMAILS is required (comma-separated Linear member emails for the local team cache)"
+    );
+  }
+
+  // Checked before any write: a missing ID must not leave tasks and
+  // projects synced and the updates leg silently absent.
+  if (!TASKS_ONLY && !process.env.NOTION_PROJECT_UPDATES_DATABASE_ID) {
+    throw new Error(
+      "NOTION_PROJECT_UPDATES_DATABASE_ID is required (Notion database ID of 📣 2026 Project Updates)"
     );
   }
 
@@ -343,6 +508,8 @@ async function main() {
 
   const viewer = await linear.getViewer();
   console.log(`  ✓ authenticated as ${viewer.name}`);
+
+  if (UPDATES_ONLY) return runUpdatesOnly(linear, viewer, teamKeys);
 
   const settledWindow = resolveSettledWindow(process.argv);
   // Backlog-state issues never reach Notion: the Tasks DB holds committed,
@@ -363,22 +530,13 @@ async function main() {
       `${nonBacklog.length - issues.length} off-team skipped)`
   );
 
-  // The projects leg pulls by assignment (lead or member), all states,
-  // scoped to the configured teams — cross-team projects Jon is merely
-  // attached to (e.g. as a stakeholder) stay out. Skipped under --tasks-only.
-  let assignedProjects = [];
+  // The projects leg pulls by scope (whole PD team, DE projects Jon
+  // leads), all states — see WHOLE_TEAM_KEYS. Skipped under --tasks-only.
+  let projects = [];
+  let projectUpdatesToSync = [];
   if (!TASKS_ONLY) {
-    const assignedNodes = await linear.getAssignedProjects(viewer.id);
-    const teamScopedNodes = assignedNodes.filter((node) =>
-      (node.teams?.nodes || []).some((t) => teamKeys.includes(t.key))
-    );
-    console.log(
-      `  ✓ ${teamScopedNodes.length} assigned ${teamKeys.join("/")} projects ` +
-        `(lead or member, all states; ${assignedNodes.length} assigned overall)`
-    );
-    assignedProjects = teamScopedNodes
-      .map(toAssignedProjectRecord)
-      .sort((a, b) => a.Name.localeCompare(b.Name));
+    projects = await fetchScopedProjects(linear, viewer, teamKeys);
+    projectUpdatesToSync = await fetchProjectUpdates(linear, projects);
   }
 
   // Local team cache: roster-assigned issues, the viewer's recent issue
@@ -470,7 +628,7 @@ async function main() {
     );
     for (const action of sync.actions) console.log(`  ${action}`);
     if (!TASKS_ONLY) {
-      const projectSync = await syncLinearProjects(assignedProjects, {
+      const projectSync = await syncLinearProjects(projects, {
         dryRun: true,
       });
       console.log(
@@ -479,6 +637,9 @@ async function main() {
           `${projectSync.unchanged} unchanged`
       );
       for (const action of projectSync.actions) console.log(`  ${action}`);
+      logUpdatesPlan(
+        await syncLinearProjectUpdates(projectUpdatesToSync, { dryRun: true })
+      );
       console.log(
         `\n[dry-run] team cache plan: ${teamIssues.length} issues, ` +
           `${myComments.length} comments, ${projectUpdates.length} project ` +
@@ -511,18 +672,24 @@ async function main() {
     return;
   }
 
-  const projectSync = await syncLinearProjects(assignedProjects);
+  const projectSync = await syncLinearProjects(projects);
   console.log(
     `✅ Notion 2026 Projects synced (${projectSync.created} created, ` +
       `${projectSync.updated} updated, ${projectSync.gone} marked gone, ` +
       `${projectSync.unchanged} unchanged)`
   );
 
+  // After the projects leg, so a post on a newly synced project finds its
+  // 2026 Projects row for the relation.
+  const updateSync = await syncLinearProjectUpdates(projectUpdatesToSync);
+  console.log(`✅ Notion 2026 Project Updates synced (${updatesSummary(updateSync)})`);
+
   pingHeartbeat(
     "ok",
     `notion tasks +${sync.created}/~${sync.updated}/gone ${sync.gone}, ` +
       `notion projects +${projectSync.created}/~${projectSync.updated}/gone ` +
-      `${projectSync.gone}, team cache ${teamIssues.length} issues/` +
+      `${projectSync.gone}, notion project updates +${updateSync.created}/` +
+      `~${updateSync.updated}, team cache ${teamIssues.length} issues/` +
       `${myComments.length} comments/${projectUpdates.length} project updates`
   );
 }
