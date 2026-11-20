@@ -13,7 +13,7 @@
  *
  * Field ownership — the sync owns columns, not rows:
  *   - Sync-owned (overwritten every run): Project, Status, Date, Priority,
- *     Linear ID (the idempotency key), Linear URL, Description (Linear's
+ *     Linear Lead (select — the lead's Linear display name), Linear ID (the idempotency key), Linear URL, Description (Linear's
  *     short summary metadata), the page body (Linear's project overview
  *     doc, markdown → blocks), and the page icon (emoji by team —
  *     🎨 PD/DSGN, 🏗️ DE).
@@ -25,8 +25,9 @@
  *
  * Upserted by cli/pull-linear.js on `Linear ID` (project UUID — projects
  * have no DSGN-123-style identifier); rows are never deleted, only marked
- * 🫥 Gone when a project falls out of the pull (archived, or Jon removed
- * from it — settled rows keep 🟢 Done / ❌ Canceled).
+ * 🫥 Gone when a project falls out of the pull (archived, or out of scope —
+ * e.g. a DE project Jon no longer leads; settled rows keep 🟢 Done /
+ * ❌ Canceled).
  */
 
 module.exports = {
@@ -37,6 +38,7 @@ module.exports = {
     status: { name: "Status", type: "status", enabled: true },
     date: { name: "Date", type: "date", enabled: true },
     priority: { name: "Priority", type: "select", enabled: true },
+    linearLead: { name: "Linear Lead", type: "select", enabled: true },
     linearId: { name: "Linear ID", type: "rich_text", enabled: true },
     linearUrl: { name: "Linear URL", type: "url", enabled: true },
     category: { name: "Category", type: "select", enabled: true },

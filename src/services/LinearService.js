@@ -143,30 +143,25 @@ class LinearService {
   }
 
   /**
-   * Projects the given user leads or is a member of — any state, any team.
-   * Feeds the Notion 2026 Projects upsert (the caller scopes to the
-   * configured teams; a Linear project has a teams *list*, so that check
-   * is client-side). Deliberately unfiltered by state so backlog and
-   * completed projects land too (Gone then means only archived-or-removed).
-   * Slim node: only the fields the Notion leg writes, plus team keys.
-   * description is the short summary metadata line; content is the project
-   * overview document as markdown — both land in Notion (Description
-   * property / page body).
+   * Every project on any of the given team keys — any state, any lead.
+   * Feeds the Notion 2026 Projects upsert; the caller applies the scope
+   * rule (whole team vs. led-by-me), which needs the full teams list and
+   * the lead, so both come along. Deliberately unfiltered by state so
+   * backlog and completed projects land too (Gone then means only
+   * archived-or-out-of-scope). Slim node: only the fields the Notion leg
+   * writes. description is the short summary metadata line; content is
+   * the project overview document as markdown — both land in Notion
+   * (Description property / page body).
    */
-  async getAssignedProjects(userId) {
-    const filter = {
-      or: [
-        { lead: { id: { eq: userId } } },
-        { members: { some: { id: { eq: userId } } } },
-      ],
-    };
+  async getProjectsOnTeams(teamKeys) {
+    const filter = { accessibleTeams: { some: { key: { in: teamKeys } } } };
 
     const nodes = [];
     let after = null;
 
     do {
       const data = await this.graphql(
-        `query AssignedProjects($filter: ProjectFilter!, $first: Int!, $after: String) {
+        `query ProjectsOnTeams($filter: ProjectFilter!, $first: Int!, $after: String) {
           projects(first: $first, after: $after, filter: $filter) {
             nodes {
               id
@@ -178,6 +173,7 @@ class LinearService {
               priorityLabel
               startDate
               targetDate
+              lead { id name }
               teams(first: 10) { nodes { key } }
             }
             pageInfo { hasNextPage endCursor }
@@ -325,6 +321,50 @@ class LinearService {
         {
           filter: {
             project: { accessibleTeams: { some: { key: { in: teamKeys } } } },
+            createdAt: { gt: cutoff },
+          },
+          first: PAGE_SIZE,
+          after,
+        }
+      );
+      const page = data.projectUpdates;
+      nodes.push(...page.nodes);
+      after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+    } while (after);
+
+    return nodes;
+  }
+
+  /**
+   * Every project-update post on the given projects (project UUIDs)
+   * created after `cutoff` (ISO datetime), any author. diffMarkdown is
+   * Linear's auto-generated change list on the post (status, dates, lead,
+   * progress / milestone percentages).
+   */
+  async getProjectUpdatesOnProjects(projectIds, cutoff) {
+    const nodes = [];
+    let after = null;
+
+    do {
+      const data = await this.graphql(
+        `query ProjectUpdatesOnProjects($filter: ProjectUpdateFilter!, $first: Int!, $after: String) {
+          projectUpdates(first: $first, after: $after, filter: $filter, orderBy: createdAt) {
+            nodes {
+              id
+              body
+              health
+              diffMarkdown
+              createdAt
+              url
+              user { name }
+              project { id name }
+            }
+            pageInfo { hasNextPage endCursor }
+          }
+        }`,
+        {
+          filter: {
+            project: { id: { in: projectIds } },
             createdAt: { gt: cutoff },
           },
           first: PAGE_SIZE,

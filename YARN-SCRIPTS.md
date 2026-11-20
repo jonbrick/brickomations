@@ -85,8 +85,11 @@ cd ~/projects/brickomations && yarn pull --auto
 
 cd ~/projects/brickomations && yarn pull:linear
                             # Linear → Notion (assigned issues → 2026
-                            # Tasks, assigned projects → 2026 Projects;
-                            # both scoped to the configured teams)
+                            # Tasks, scoped to the configured teams;
+                            # every PD-only project + DE projects I lead
+                            # → 2026 Projects; every author's project-
+                            # update posts on those projects → 📣 2026
+                            # Project Updates, last 14 days)
                             # AND → local data/linearTeam.json (design-team
                             # roster issues, my recent comments, project-
                             # update posts on the configured teams'
@@ -95,6 +98,10 @@ cd ~/projects/brickomations && yarn pull:linear
                             # issues-only leg behind linear:week /
                             # linear:range; --days= / --from= --to= set
                             # the settled window (default 21 days).
+                            # --updates-only is the project-updates leg
+                            # alone (no tasks/projects sync, no team
+                            # cache, no heartbeat); --updates-since=
+                            # YYYY-MM-DD widens its window (backfill).
                             # on schedule it runs inside yarn sync: the
                             # full pull in the morning/evening tiers, the
                             # tasks-only leg every 2 hours (see Heavy).
