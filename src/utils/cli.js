@@ -815,7 +815,7 @@ function showSummary(summary) {
 /**
  * Create a simple spinner
  *
- * @param {string} message - Spinner message
+ * @param {string} message - Spinner message (start(label) can replace it)
  * @returns {Object} Spinner control object
  */
 function createSpinner(message) {
@@ -825,13 +825,16 @@ function createSpinner(message) {
   let interval = null;
 
   return {
-    start() {
+    // An optional label replaces the message from here on, so one spinner
+    // can name each step it waits on ("Pulling Oura (Sleep)...").
+    start(label = null) {
+      if (label) message = label;
       if (!isTTY) return;
       if (interval) clearInterval(interval);
-      process.stdout.write(`${frames[currentFrame]} ${message}`);
+      process.stdout.write(`\r\x1b[2K${frames[currentFrame]} ${message}`);
       interval = setInterval(() => {
         currentFrame = (currentFrame + 1) % frames.length;
-        process.stdout.write(`\r${frames[currentFrame]} ${message}`);
+        process.stdout.write(`\r\x1b[2K${frames[currentFrame]} ${message}`);
       }, 80);
     },
 

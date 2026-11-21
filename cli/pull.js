@@ -148,7 +148,7 @@ async function pullPlanData(spinner) {
   // Pull Weeks
   const weeksDbId = process.env.WEEKS_DATABASE_ID;
   if (weeksDbId) {
-    spinner.start();
+    spinner.start("Pulling weeks...");
     const pages = await db.queryDatabaseAll(weeksDbId);
     plan.weeks = pages.map((page) => {
       const data = extractAllProperties(page);
@@ -161,7 +161,7 @@ async function pullPlanData(spinner) {
   // Pull Months
   const monthsDbId = process.env.MONTHS_DATABASE_ID;
   if (monthsDbId) {
-    spinner.start();
+    spinner.start("Pulling months...");
     const pages = await db.queryDatabaseAll(monthsDbId);
     plan.months = pages.map(extractAllProperties);
     spinner.stop(`  ✓ ${plan.months.length} months`);
@@ -171,7 +171,7 @@ async function pullPlanData(spinner) {
   // Pull Rocks
   const rocksDbId = process.env.NOTION_ROCKS_DATABASE_ID;
   if (rocksDbId) {
-    spinner.start();
+    spinner.start("Pulling rocks...");
     const pages = await db.queryDatabaseAll(rocksDbId);
     plan.rocks = pages.map(extractAllProperties);
     spinner.stop(`  ✓ ${plan.rocks.length} rocks`);
@@ -181,7 +181,7 @@ async function pullPlanData(spinner) {
   // Pull Events
   const eventsDbId = process.env.NOTION_EVENTS_DATABASE_ID;
   if (eventsDbId) {
-    spinner.start();
+    spinner.start("Pulling events...");
     const pages = await db.queryDatabaseAll(eventsDbId);
     plan.events = pages.map(extractAllProperties);
     spinner.stop(`  ✓ ${plan.events.length} events`);
@@ -191,7 +191,7 @@ async function pullPlanData(spinner) {
   // Pull Trips
   const tripsDbId = process.env.NOTION_TRIPS_DATABASE_ID;
   if (tripsDbId) {
-    spinner.start();
+    spinner.start("Pulling trips...");
     const pages = await db.queryDatabaseAll(tripsDbId);
     plan.trips = pages.map(extractAllProperties);
     spinner.stop(`  ✓ ${plan.trips.length} trips`);
@@ -217,7 +217,7 @@ async function pullNycData(spinner) {
     if (!dbId) continue;
 
     try {
-      spinner.start();
+      spinner.start(`Pulling ${dbConfig.label}...`);
       const pages = await db.queryDatabaseAll(dbId);
       nyc[key] = pages.map(extractAllProperties);
       spinner.stop(`  ✓ ${nyc[key].length} ${dbConfig.label}`);
@@ -247,7 +247,7 @@ async function pullRetroData(spinner) {
     if (!dbId) continue;
 
     try {
-      spinner.start();
+      spinner.start(`Pulling ${dbConfig.label}...`);
       const pages = await db.queryDatabaseAll(dbId);
       retro[key] = pages.map(extractAllProperties);
       spinner.stop(`  ✓ ${retro[key].length} ${dbConfig.label}`);
@@ -303,7 +303,7 @@ async function pullLifeData(spinner) {
     }
 
     try {
-      spinner.start();
+      spinner.start(`Pulling ${dbConfig.label}...`);
       const pages = await db.queryDatabaseAll(dbId);
       life[key] = pages.map(extractAllProperties);
       spinner.stop(`  ✓ ${life[key].length} ${dbConfig.label}`);
@@ -328,7 +328,7 @@ async function pullLifeData(spinner) {
       }
     }
 
-    spinner.start();
+    spinner.start("Pulling task content...");
     let fetched = 0;
     let skipped = 0;
     let withContent = 0;
@@ -416,7 +416,7 @@ async function attachBodies(spinner, life, existingLife, key, label, include = (
   }
   const emptyHash = crypto.createHash("md5").update("").digest("hex");
 
-  spinner.start();
+  spinner.start(`Pulling ${label}...`);
   let fetched = 0;
   let skipped = 0;
   for (const record of records) {
@@ -549,7 +549,7 @@ async function pullCollectedData(spinner, startDate, endDate) {
   for (const id of integrationIds) {
     const existingBucket = Array.isArray(existing?.[id]) ? existing[id] : [];
     try {
-      spinner.start();
+      spinner.start(`Pulling ${INTEGRATIONS[id].name}...`);
       const integrationDb = new IntegrationDatabase(id);
       const pages = await integrationDb.getAllInDateRange(startDate, endDate);
       const pulled = pages.map(extractAllProperties);
@@ -588,7 +588,7 @@ async function pullSummaries(spinner) {
   // Personal weekly summaries
   const personalSummaryDbId = process.env.PERSONAL_WEEK_SUMMARY_DATABASE_ID;
   if (personalSummaryDbId) {
-    spinner.start();
+    spinner.start("Pulling personal weekly summaries...");
     const pages = await db.queryDatabaseAll(personalSummaryDbId);
     summaries.personalWeekly = pages.map(extractAllProperties);
     spinner.stop(
@@ -600,7 +600,7 @@ async function pullSummaries(spinner) {
   // Work weekly summaries
   const workSummaryDbId = process.env.WORK_WEEK_SUMMARY__DATABASE_ID;
   if (workSummaryDbId) {
-    spinner.start();
+    spinner.start("Pulling work weekly summaries...");
     const pages = await db.queryDatabaseAll(workSummaryDbId);
     summaries.workWeekly = pages.map(extractAllProperties);
     spinner.stop(`  ✓ ${summaries.workWeekly.length} work weekly summaries`);
@@ -610,7 +610,7 @@ async function pullSummaries(spinner) {
   // Personal monthly recaps
   const personalRecapDbId = process.env.PERSONAL_MONTHLY_RECAP_DATABASE_ID;
   if (personalRecapDbId) {
-    spinner.start();
+    spinner.start("Pulling personal monthly recaps...");
     const pages = await db.queryDatabaseAll(personalRecapDbId);
     summaries.personalMonthlyRecap = pages.map(extractAllProperties);
     spinner.stop(
@@ -622,7 +622,7 @@ async function pullSummaries(spinner) {
   // Work monthly recaps
   const workRecapDbId = process.env.WORK_MONTHLY_RECAP_DATABASE_ID;
   if (workRecapDbId) {
-    spinner.start();
+    spinner.start("Pulling work monthly recaps...");
     const pages = await db.queryDatabaseAll(workRecapDbId);
     summaries.workMonthlyRecap = pages.map(extractAllProperties);
     spinner.stop(
@@ -763,7 +763,7 @@ async function pullCalendar(spinner, startDate, endDate) {
     const existingBucket = Array.isArray(existing?.[calId]) ? existing[calId] : [];
 
     try {
-      spinner.start();
+      spinner.start(`Pulling ${calConfig.name}...`);
       const events = await service.listEvents(calendarId, startDate, endDate);
       const pulled = events.map((event) => stampHash({
         _calendarId: event.id,
