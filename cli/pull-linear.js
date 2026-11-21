@@ -87,7 +87,7 @@ const {
   syncLinearProjectUpdates,
 } = require("../src/workflows/linear-to-notion-project-updates");
 const { readFileSyncRetry } = require("../src/utils/fs-retry");
-const { parseDateRangeFromArgv } = require("../src/utils/cli");
+const { parseDateRangeFromArgv, createSpinner } = require("../src/utils/cli");
 
 const REPO_ROOT = path.join(__dirname, "..");
 const DATA_DIR = path.join(REPO_ROOT, "data");
@@ -405,7 +405,9 @@ function inProjectScope(node, viewerId, teamKeys) {
 
 /** In-scope projects (all states) on the configured teams. */
 async function fetchScopedProjects(linear, viewer, teamKeys) {
-  const nodes = await linear.getProjectsOnTeams(teamKeys);
+  const nodes = await step("Fetching Linear projects...", () =>
+    linear.getProjectsOnTeams(teamKeys)
+  );
   const scoped = nodes.filter((node) => inProjectScope(node, viewer.id, teamKeys));
   console.log(
     `  ✓ ${scoped.length} in-scope projects (all ${WHOLE_TEAM_KEYS.join("/")}-only ` +
@@ -422,7 +424,9 @@ async function fetchScopedProjects(linear, viewer, teamKeys) {
 async function fetchProjectUpdates(linear, projects) {
   const { cutoff, label } = resolveUpdatesCutoff(process.argv);
   const nodes = (
-    await linear.getProjectUpdatesOnProjects(projects.map((p) => p.Id), cutoff)
+    await step("Fetching project updates on in-scope projects...", () =>
+      linear.getProjectUpdatesOnProjects(projects.map((p) => p.Id), cutoff)
+    )
   ).filter((node) => node.project);
   const records = nodes
     .map(toProjectUpdateSyncRecord)
@@ -452,13 +456,31 @@ async function runUpdatesOnly(linear, viewer, teamKeys) {
   const projects = await fetchScopedProjects(linear, viewer, teamKeys);
   const updates = await fetchProjectUpdates(linear, projects);
   if (DRY_RUN) {
-    logUpdatesPlan(await syncLinearProjectUpdates(updates, { dryRun: true }));
+    logUpdatesPlan(
+      await step("Planning Notion 2026 Project Updates sync...", () =>
+        syncLinearProjectUpdates(updates, { dryRun: true })
+      )
+    );
     console.log("\n[dry-run] nothing written");
     return;
   }
-  const sync = await syncLinearProjectUpdates(updates);
+  const sync = await step("Syncing Notion 2026 Project Updates...", () =>
+    syncLinearProjectUpdates(updates)
+  );
   console.log(`✅ Notion 2026 Project Updates synced (${updatesSummary(sync)})`);
   console.log("[updates-only] skipped: tasks, projects sync, team cache, heartbeat");
+}
+
+// Spins while a step waits on Linear or Notion (TTY only, so launchd logs
+// stay clean); the step's own ✓ line prints after the spinner clears.
+const spinner = createSpinner("Working...");
+async function step(label, fn) {
+  spinner.start(label);
+  try {
+    return await fn();
+  } finally {
+    spinner.stop();
+  }
 }
 
 // --- Main ---
@@ -506,7 +528,9 @@ async function main() {
   const weeks = loadWeeks();
   const linear = new LinearService();
 
-  const viewer = await linear.getViewer();
+  const viewer = await step("Authenticating with Linear...", () =>
+    linear.getViewer()
+  );
   console.log(`  ✓ authenticated as ${viewer.name}`);
 
   if (UPDATES_ONLY) return runUpdatesOnly(linear, viewer, teamKeys);
@@ -521,7 +545,9 @@ async function main() {
   // Jon owns on another team gets a twin ticket on a PD/DE board, and the
   // twin is the tracked row (Jon, Thu 2026-10-29). Same gone-pass retire
   // for rows the off-team originals left behind; settled rows stay put.
-  const pulled = await linear.getAssignedIssues(settledWindow);
+  const pulled = await step("Fetching assigned issues...", () =>
+    linear.getAssignedIssues(settledWindow)
+  );
   const nonBacklog = pulled.filter((node) => node.state.type !== "backlog");
   const issues = nonBacklog.filter((node) => teamKeys.includes(node.team?.key));
   console.log(
@@ -549,9 +575,8 @@ async function main() {
   let projectUpdates = [];
   let teamCache = null;
   if (!TASKS_ONLY) {
-    const rosterNodes = await linear.getIssuesAssignedToEmails(
-      rosterEmails,
-      settledWindow
+    const rosterNodes = await step("Fetching team-roster issues...", () =>
+      linear.getIssuesAssignedToEmails(rosterEmails, settledWindow)
     );
     console.log(
       `  ✓ ${rosterNodes.length} team-roster issues (${rosterEmails.length} members, ` +
@@ -562,7 +587,9 @@ async function main() {
       Date.now() - COMMENT_WINDOW_DAYS * 24 * 60 * 60 * 1000
     ).toISOString();
     const commentNodes = (
-      await linear.getMyRecentComments(commentCutoff)
+      await step("Fetching my issue comments...", () =>
+        linear.getMyRecentComments(commentCutoff)
+      )
     ).filter((node) => node.issue);
     console.log(
       `  ✓ ${commentNodes.length} of my issue comments (last ${COMMENT_WINDOW_DAYS} days)`
@@ -576,7 +603,9 @@ async function main() {
       Date.now() - PROJECT_UPDATE_WINDOW_DAYS * 24 * 60 * 60 * 1000
     ).toISOString();
     const updateNodes = (
-      await linear.getProjectUpdates(teamKeys, updateCutoff)
+      await step("Fetching project updates on team projects...", () =>
+        linear.getProjectUpdates(teamKeys, updateCutoff)
+      )
     ).filter((node) => node.project);
     projectUpdates = updateNodes
       .map((node) => toProjectUpdateRecord(node, weeks, viewer.email))
@@ -621,16 +650,18 @@ async function main() {
   });
 
   if (DRY_RUN) {
-    const sync = await syncLinearTasks(tasks, { dryRun: true });
+    const sync = await step("Planning Notion 2026 Tasks sync...", () =>
+      syncLinearTasks(tasks, { dryRun: true })
+    );
     console.log(
       `\n[dry-run] tasks plan: ${sync.created} create, ${sync.updated} update, ` +
         `${sync.gone} gone, ${sync.unchanged} unchanged`
     );
     for (const action of sync.actions) console.log(`  ${action}`);
     if (!TASKS_ONLY) {
-      const projectSync = await syncLinearProjects(projects, {
-        dryRun: true,
-      });
+      const projectSync = await step("Planning Notion 2026 Projects sync...", () =>
+        syncLinearProjects(projects, { dryRun: true })
+      );
       console.log(
         `\n[dry-run] projects plan: ${projectSync.created} create, ` +
           `${projectSync.updated} update, ${projectSync.gone} gone, ` +
@@ -638,7 +669,9 @@ async function main() {
       );
       for (const action of projectSync.actions) console.log(`  ${action}`);
       logUpdatesPlan(
-        await syncLinearProjectUpdates(projectUpdatesToSync, { dryRun: true })
+        await step("Planning Notion 2026 Project Updates sync...", () =>
+          syncLinearProjectUpdates(projectUpdatesToSync, { dryRun: true })
+        )
       );
       console.log(
         `\n[dry-run] team cache plan: ${teamIssues.length} issues, ` +
@@ -661,7 +694,9 @@ async function main() {
   // Linear → Notion: upsert issues into the shared 2026 Tasks DB so Notion
   // is the one holistic layer for phone-side retro/planning. Upsert on
   // Linear ID; absent issues marked 🫥 Gone (settled rows left alone).
-  const sync = await syncLinearTasks(tasks);
+  const sync = await step("Syncing Notion 2026 Tasks...", () =>
+    syncLinearTasks(tasks)
+  );
   console.log(
     `✅ Notion 2026 Tasks synced (${sync.created} created, ${sync.updated} updated, ` +
       `${sync.gone} marked gone, ${sync.unchanged} unchanged)`
@@ -672,7 +707,9 @@ async function main() {
     return;
   }
 
-  const projectSync = await syncLinearProjects(projects);
+  const projectSync = await step("Syncing Notion 2026 Projects...", () =>
+    syncLinearProjects(projects)
+  );
   console.log(
     `✅ Notion 2026 Projects synced (${projectSync.created} created, ` +
       `${projectSync.updated} updated, ${projectSync.gone} marked gone, ` +
@@ -681,7 +718,9 @@ async function main() {
 
   // After the projects leg, so a post on a newly synced project finds its
   // 2026 Projects row for the relation.
-  const updateSync = await syncLinearProjectUpdates(projectUpdatesToSync);
+  const updateSync = await step("Syncing Notion 2026 Project Updates...", () =>
+    syncLinearProjectUpdates(projectUpdatesToSync)
+  );
   console.log(`✅ Notion 2026 Project Updates synced (${updatesSummary(updateSync)})`);
 
   pingHeartbeat(
