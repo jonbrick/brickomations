@@ -229,7 +229,7 @@ async function pushRecords(records, label, spinner, configKey = null) {
     }
 
     try {
-      spinner.start();
+      spinner.start(`Pushing ${label}...`);
       await db.updatePage(notionId, properties, configKey);
       results.updated++;
       await delay(config.sources.rateLimits.notion.backoffMs);
@@ -345,7 +345,7 @@ async function pushCalendar(spinner) {
       }
 
       try {
-        spinner.start();
+        spinner.start(`Pushing ${calConfig.name}...`);
         const eventData = {
           summary: event.summary,
           description: event.description || "",
@@ -448,7 +448,7 @@ async function pushLifeData(spinner, { tasksOnly = false } = {}) {
         }
 
         try {
-          spinner.start();
+          spinner.start("Pushing task content...");
           const blocks = markdownToBlocks(task._content || "");
           await db.replacePageContent(task._notionId, blocks);
           contentUpdated++;

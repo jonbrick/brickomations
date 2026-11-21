@@ -88,7 +88,7 @@ async function importCsv(dbConfig, spinner) {
 
     // Check for duplicates by title
     try {
-      spinner.start();
+      spinner.start(`Importing ${dbConfig.label}...`);
       const existing = await db.queryDatabase(databaseId, {
         property: "Name",
         title: { equals: name },
